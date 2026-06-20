@@ -88,6 +88,50 @@
             margin: 8px 0 12px 0;
             font-weight: 700;
         }
+
+        .filters-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            margin: 20px 0 10px 0;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .filters-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(4, 1fr) auto;
+            gap: 12px;
+            align-items: end;
+        }
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .btn-limpiar {
+            background: #e2e8f0;
+            color: #334155;
+            border: none;
+            padding: 11px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .btn-limpiar:hover {
+            background: #cbd5e1;
+        }
+        .contador-resultados {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin: 10px 0 0 0;
+            font-weight: 600;
+        }
+        @media (max-width: 1100px) {
+            .filters-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
     </style>
 
     <script type="module">
@@ -109,6 +153,11 @@
         
         let allData = [];
         let currentFilter = 'Todos';
+        let searchTerm = '';
+        let filterDepartamento = 'Todos';
+        let filterArea = 'Todos';
+        let filterTipoCompra = 'Todos';
+        let filterCotizacion = 'Todos';
         let editingId = null;
 
         const DEFAULT_PARTIDA = '411. Artículos, materiales y útiles diversos.';
@@ -212,6 +261,31 @@
                 const texto = b.dataset.filter || b.innerText;
                 b.classList.toggle('active', texto === f);
             });
+            render();
+        };
+
+        // Buscador y filtros avanzados
+        window.aplicarFiltrosAvanzados = () => {
+            searchTerm = document.getElementById('searchInput')?.value.trim().toLowerCase() || '';
+            filterDepartamento = document.getElementById('filterDepartamento')?.value || 'Todos';
+            filterArea = document.getElementById('filterArea')?.value || 'Todos';
+            filterTipoCompra = document.getElementById('filterTipoCompra')?.value || 'Todos';
+            filterCotizacion = document.getElementById('filterCotizacion')?.value || 'Todos';
+            render();
+        };
+
+        window.limpiarFiltrosAvanzados = () => {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) searchInput.value = '';
+            ['filterDepartamento', 'filterArea', 'filterTipoCompra', 'filterCotizacion'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = 'Todos';
+            });
+            searchTerm = '';
+            filterDepartamento = 'Todos';
+            filterArea = 'Todos';
+            filterTipoCompra = 'Todos';
+            filterCotizacion = 'Todos';
             render();
         };
 
@@ -788,18 +862,66 @@
             render();
         });
 
-        // Renderizar la tabla de pendientes
+        // Renderizar la tabla de pendientes con buscador y filtros
         function render() {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
-            const filtered = currentFilter === 'Todos' ? allData : allData.filter(d => d.status === currentFilter);
+
+            const filtered = allData.filter(item => {
+                const estado = item.status || 'Pendiente';
+                const departamento = item.departamento || '';
+                const area = item.area || '';
+                const tipoCompra = item.tipoCompra || '';
+                const cotizacion = item.cotizacion || '';
+                const articulosTexto = (item.articulos || [])
+                    .map(a => `${a.concepto || ''} ${a.justificacion || ''} ${a.um || ''}`)
+                    .join(' ');
+
+                const textoBusqueda = [
+                    item.folio || '',
+                    item.desc || '',
+                    departamento,
+                    area,
+                    tipoCompra,
+                    cotizacion,
+                    item.observaciones || '',
+                    articulosTexto
+                ].join(' ').toLowerCase();
+
+                const pasaEstado = currentFilter === 'Todos' || estado === currentFilter;
+                const pasaBusqueda = !searchTerm || textoBusqueda.includes(searchTerm);
+                const pasaDepartamento = filterDepartamento === 'Todos' || departamento === filterDepartamento;
+                const pasaArea = filterArea === 'Todos' || area === filterArea;
+                const pasaTipo = filterTipoCompra === 'Todos' || tipoCompra === filterTipoCompra;
+                const pasaCotizacion = filterCotizacion === 'Todos' || cotizacion === filterCotizacion;
+
+                return pasaEstado && pasaBusqueda && pasaDepartamento && pasaArea && pasaTipo && pasaCotizacion;
+            });
+
+            const contador = document.getElementById('contadorResultados');
+            if (contador) {
+                contador.innerText = `${filtered.length} requisición(es) encontrada(s)`;
+            }
+
+            if (filtered.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="6" style="text-align:center; color:#64748b; padding:24px;">No se encontraron requisiciones con esos filtros.</td>`;
+                tbody.appendChild(row);
+                return;
+            }
             
             filtered.forEach(item => {
                 const row = document.createElement('tr');
                 const estado = item.status || 'Pendiente';
-                const folioTexto = item.folio ? `<br><small style="color:#64748b; font-weight:600;">${escapeHTML(item.folio)}</small>` : '';
+                const folio = item.folio || 'Sin folio';
+                const departamento = item.departamento || 'N/A';
+                const area = item.area || 'N/A';
+                const cotizacion = item.cotizacion || 'N/A';
                 row.innerHTML = `
-                    <td class="${estado === 'Completado' ? 'status-comp' : ''}">${escapeHTML(item.desc || 'Requisición')}${folioTexto}</td>
+                    <td style="font-weight:700; color:#002147;">${escapeHTML(folio)}</td>
+                    <td class="${estado === 'Completado' ? 'status-comp' : ''}">${escapeHTML(item.desc || 'Requisición')}<br><small style="color:#64748b;">${escapeHTML(area)}</small></td>
+                    <td>${escapeHTML(departamento)}</td>
+                    <td>${escapeHTML(cotizacion)}</td>
                     <td><span style="font-weight:600; color: ${estado === 'Completado' ? '#10b981' : '#f59e0b'}">${escapeHTML(estado)}</span></td>
                     <td>
                         <button onclick="descargarExcelRequisicion('${item.id}')" class="btn-table" style="border-color: #10b981; color: #047857;">📥 Excel</button>
@@ -945,11 +1067,64 @@
             <button class="tab-btn" data-filter="Completado" onclick="setFilter('Completado')">Completados</button>
         </div>
 
+        <!-- Buscador y filtros avanzados -->
+        <section class="filters-panel">
+            <div class="filters-grid">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Buscar:</label>
+                    <input id="searchInput" type="text" class="form-control" placeholder="Folio, concepto, área, observaciones..." oninput="aplicarFiltrosAvanzados()">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Departamento:</label>
+                    <select id="filterDepartamento" class="form-control" onchange="aplicarFiltrosAvanzados()">
+                        <option value="Todos">Todos</option>
+                        <option value="Máquinas">Máquinas</option>
+                        <option value="Cubierta">Cubierta</option>
+                        <option value="Base">Base</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Área:</label>
+                    <select id="filterArea" class="form-control" onchange="aplicarFiltrosAvanzados()">
+                        <option value="Todos">Todas</option>
+                        <option value="B/O El Puma">B/O El Puma</option>
+                        <option value="Base Pacífico">Base Pacífico</option>
+                        <option value="Oficina Central">Oficina Central</option>
+                        <option value="B/O Justo Sierra">B/O Justo Sierra</option>
+                        <option value="Base Golfo de México">Base Golfo de México</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Tipo:</label>
+                    <select id="filterTipoCompra" class="form-control" onchange="aplicarFiltrosAvanzados()">
+                        <option value="Todos">Todos</option>
+                        <option value="Nacional">Nacional</option>
+                        <option value="Extranjera">Extranjera</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Cotización:</label>
+                    <select id="filterCotizacion" class="form-control" onchange="aplicarFiltrosAvanzados()">
+                        <option value="Todos">Todas</option>
+                        <option value="Provisional">Provisional</option>
+                        <option value="Final">Final</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button type="button" class="btn-limpiar" onclick="limpiarFiltrosAvanzados()">Limpiar</button>
+                </div>
+            </div>
+            <p id="contadorResultados" class="contador-resultados">0 requisición(es) encontrada(s)</p>
+        </section>
+
         <!-- Tabla Estilizada con el CSS centralizado -->
         <table>
             <thead>
                 <tr>
+                    <th>Folio</th>
                     <th>Tarea / Concepto</th>
+                    <th>Departamento</th>
+                    <th>Cotización</th>
                     <th>Estado</th>
                     <th>Acción</th>
                 </tr>
