@@ -82,18 +82,72 @@
             background: #f8fafc;
             border-color: #94a3b8;
         }
+
+        .filters-panel {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 15px 0 20px 0;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.04);
+        }
+        .filters-grid {
+            display: grid;
+            grid-template-columns: 2fr repeat(4, 1fr);
+            gap: 12px;
+            align-items: end;
+        }
+        .filters-grid label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #475569;
+            margin-bottom: 5px;
+        }
+        .filters-grid input,
+        .filters-grid select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+            background: white;
+        }
+        .filter-results {
+            margin-top: 10px;
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        @media (max-width: 1000px) {
+            .filters-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 650px) {
+            .filters-grid { grid-template-columns: 1fr; }
+        }
         .form-section-title {
             font-size: 1.05rem;
             color: #002147;
             margin: 8px 0 12px 0;
             font-weight: 700;
         }
+        .btn-logout {
+            width: 100%;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-logout:hover { background: #dc2626; }
     </style>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, updateDoc, doc, query, orderBy, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, updateDoc, doc, query, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
@@ -107,12 +161,14 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-
         const auth = getAuth(app);
 
         onAuthStateChanged(auth, (user) => {
             if (!user) {
                 window.location.href = "login.html";
+            } else {
+                const userEmail = document.getElementById('userEmail');
+                if (userEmail) userEmail.innerText = user.email || 'Usuario';
             }
         });
 
@@ -123,6 +179,12 @@
         
         let allData = [];
         let currentFilter = 'Todos';
+        let editingId = null;
+        let searchText = '';
+        let deptoFilter = 'Todos';
+        let areaFilter = 'Todos';
+        let cotizacionFilter = 'Todos';
+        let tipoCompraFilter = 'Todos';
 
         const DEFAULT_PARTIDA = '411. Artículos, materiales y útiles diversos.';
         const TEMPLATE_URL = '../assets/templates/Req.%20Base%20Mazatl%C3%A1n.xlsx';
@@ -228,9 +290,112 @@
             render();
         };
 
+        // Búsqueda y filtros avanzados
+        window.aplicarFiltrosBusqueda = () => {
+            searchText = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+            deptoFilter = document.getElementById('filterDepartamento')?.value || 'Todos';
+            areaFilter = document.getElementById('filterArea')?.value || 'Todos';
+            cotizacionFilter = document.getElementById('filterCotizacion')?.value || 'Todos';
+            tipoCompraFilter = document.getElementById('filterTipoCompra')?.value || 'Todos';
+            render();
+        };
+
+        window.limpiarFiltrosBusqueda = () => {
+            const searchInput = document.getElementById('searchInput');
+            const filterDepartamento = document.getElementById('filterDepartamento');
+            const filterArea = document.getElementById('filterArea');
+            const filterCotizacion = document.getElementById('filterCotizacion');
+            const filterTipoCompra = document.getElementById('filterTipoCompra');
+            if (searchInput) searchInput.value = '';
+            if (filterDepartamento) filterDepartamento.value = 'Todos';
+            if (filterArea) filterArea.value = 'Todos';
+            if (filterCotizacion) filterCotizacion.value = 'Todos';
+            if (filterTipoCompra) filterTipoCompra.value = 'Todos';
+            searchText = '';
+            deptoFilter = 'Todos';
+            areaFilter = 'Todos';
+            cotizacionFilter = 'Todos';
+            tipoCompraFilter = 'Todos';
+            render();
+        };
+
         // Marcar tarea o requisición como completada
         window.complete = async (id) => { 
             await updateDoc(doc(db, 'tareas', id), { status: 'Completado' }); 
+        };
+
+        window.deleteRequisicion = async (id) => {
+            const item = allData.find(d => d.id === id);
+            const nombre = item?.folio || item?.desc || 'esta requisición';
+            const confirmar = confirm(`¿Seguro que quieres eliminar ${nombre}? Esta acción no se puede deshacer.`);
+            if (!confirmar) return;
+
+            try {
+                await deleteDoc(doc(db, 'tareas', id));
+                alert('Requisición eliminada correctamente.');
+            } catch (error) {
+                console.error('Error al eliminar:', error);
+                alert('No se pudo eliminar la requisición.');
+            }
+        };
+
+        window.abrirNuevaRequisicion = () => {
+            editingId = null;
+            const form = document.getElementById('reqForm');
+            if (form) form.reset();
+            document.getElementById('modalTitle').innerText = 'Formato de Requisición';
+            document.getElementById('submitBtn').innerText = 'Guardar y Registrar Requisición';
+            document.getElementById('fechaElaboracion').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('partidaPresupuestal').value = DEFAULT_PARTIDA;
+            document.getElementById('articulosContainer').innerHTML = `
+                <div class="articulo-row">
+                    <input type="text" placeholder="Concepto / Descripción" class="form-control" style="flex: 2;" required>
+                    <input type="number" placeholder="Cant." value="1" min="1" class="form-control" style="width: 80px;" required>
+                    <input type="text" placeholder="U.M." value="Pieza" class="form-control" style="width: 90px;">
+                    <input type="text" placeholder="Justificación" class="form-control" style="flex: 1;">
+                </div>
+            `;
+            document.getElementById('myModal').style.display = 'block';
+        };
+
+        window.editarRequisicion = (id) => {
+            const item = allData.find(d => d.id === id);
+            if (!item) {
+                alert('No se encontró la requisición para editar.');
+                return;
+            }
+
+            editingId = id;
+            const datos = obtenerDatosRequisicion(id);
+            document.getElementById('modalTitle').innerText = 'Editar Requisición';
+            document.getElementById('submitBtn').innerText = 'Guardar Cambios';
+
+            document.getElementById('folio').value = datos.folio || '';
+            document.getElementById('fechaElaboracion').value = item.fechaElaboracion || new Date().toISOString().slice(0, 10);
+            document.getElementById('partidaPresupuestal').value = datos.partidaPresupuestal || DEFAULT_PARTIDA;
+            document.getElementById('area').value = datos.area;
+            document.getElementById('departamento').value = datos.departamento;
+            document.getElementById('atendidoPor').value = datos.atendidoPor;
+            document.getElementById('tipoCompra').value = datos.tipoCompra;
+            document.getElementById('cotizacion').value = datos.cotizacion;
+            document.getElementById('observaciones').value = datos.observaciones || '';
+
+            const container = document.getElementById('articulosContainer');
+            container.innerHTML = '';
+            datos.articulos.forEach((art, index) => {
+                const fila = document.createElement('div');
+                fila.className = 'articulo-row';
+                fila.innerHTML = `
+                    <input type="text" placeholder="Concepto / Descripción" value="${escapeHTML(art.concepto || '')}" class="form-control" style="flex: 2;" required>
+                    <input type="number" placeholder="Cant." value="${escapeHTML(art.cantidad || 1)}" min="1" class="form-control" style="width: 80px;" required>
+                    <input type="text" placeholder="U.M." value="${escapeHTML(art.um || 'Pieza')}" class="form-control" style="width: 90px;">
+                    <input type="text" placeholder="Justificación" value="${escapeHTML(art.justificacion || '')}" class="form-control" style="flex: 1;">
+                    ${index > 0 ? '<button type="button" onclick="this.parentElement.remove()" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:18px; padding: 0 5px;">✕</button>' : ''}
+                `;
+                container.appendChild(fila);
+            });
+
+            document.getElementById('myModal').style.display = 'block';
         };
 
         function seleccionarPlantillaManual() {
@@ -731,7 +896,34 @@
         function render() {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
-            const filtered = currentFilter === 'Todos' ? allData : allData.filter(d => d.status === currentFilter);
+            let filtered = allData.filter(item => {
+                const estado = item.status || 'Pendiente';
+                const articulosTexto = Array.isArray(item.articulos)
+                    ? item.articulos.map(a => `${a.concepto || ''} ${a.justificacion || ''}`).join(' ')
+                    : '';
+                const textoCompleto = `${item.folio || ''} ${item.desc || ''} ${item.area || ''} ${item.departamento || ''} ${item.tipoCompra || ''} ${item.cotizacion || ''} ${item.observaciones || ''} ${articulosTexto}`.toLowerCase();
+
+                const coincideEstado = currentFilter === 'Todos' || estado === currentFilter;
+                const coincideBusqueda = !searchText || textoCompleto.includes(searchText);
+                const coincideDepto = deptoFilter === 'Todos' || item.departamento === deptoFilter;
+                const coincideArea = areaFilter === 'Todos' || item.area === areaFilter;
+                const coincideCotizacion = cotizacionFilter === 'Todos' || item.cotizacion === cotizacionFilter;
+                const coincideTipoCompra = tipoCompraFilter === 'Todos' || item.tipoCompra === tipoCompraFilter;
+
+                return coincideEstado && coincideBusqueda && coincideDepto && coincideArea && coincideCotizacion && coincideTipoCompra;
+            });
+
+            const contadorFiltros = document.getElementById('contadorFiltros');
+            if (contadorFiltros) {
+                contadorFiltros.innerText = `Mostrando ${filtered.length} de ${allData.length} requisiciones`;
+            }
+
+            if (filtered.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="3" style="text-align:center; color:#64748b; padding:25px;">No se encontraron requisiciones con esos filtros.</td>`;
+                tbody.appendChild(row);
+                return;
+            }
             
             filtered.forEach(item => {
                 const row = document.createElement('tr');
@@ -743,6 +935,8 @@
                     <td>
                         <button onclick="descargarExcelRequisicion('${item.id}')" class="btn-table" style="border-color: #10b981; color: #047857;">📥 Excel</button>
                         <button onclick="imprimirRequisicion('${item.id}')" class="btn-table" style="border-color: #002147; color: #002147;">🖨️ Imprimir</button>
+                        <button onclick="editarRequisicion('${item.id}')" class="btn-table" style="border-color:#f59e0b; color:#b45309;">✏️ Editar</button>
+                        <button onclick="deleteRequisicion('${item.id}')" class="btn-table" style="border-color:#ef4444; color:#dc2626;">🗑️ Eliminar</button>
                         ${estado === 'Pendiente' ? `<button onclick="complete('${item.id}')" class="btn-table" style="background:#10b981; color:white; border-color:#10b981;">✓ Listo</button>` : '✅'}
                     </td>
                 `;
@@ -804,10 +998,8 @@
                     const descResumida = `${folio} - ${departamento} - ${articulos.length} art. (${area})`;
                     
                     try {
-                        // Insertar documento completo en la colección "tareas"
-                        await addDoc(collection(db, 'tareas'), {
+                        const datosGuardar = {
                             desc: descResumida,
-                            status: 'Pendiente',
                             folio,
                             partidaPresupuestal,
                             area,
@@ -818,11 +1010,26 @@
                             cotizacion,
                             articulos,
                             observaciones,
-                            timestamp: new Date()
-                        });
+                            updatedAt: new Date()
+                        };
+
+                        if (editingId) {
+                            await updateDoc(doc(db, 'tareas', editingId), datosGuardar);
+                            alert('Requisición actualizada correctamente.');
+                        } else {
+                            await addDoc(collection(db, 'tareas'), {
+                                ...datosGuardar,
+                                status: 'Pendiente',
+                                timestamp: new Date()
+                            });
+                            alert('¡Requisición guardada exitosamente!');
+                        }
                         
                         // Limpieza del formulario y cierre del modal
+                        editingId = null;
                         form.reset();
+                        document.getElementById('modalTitle').innerText = 'Formato de Requisición';
+                        document.getElementById('submitBtn').innerText = 'Guardar y Registrar Requisición';
                         document.getElementById('fechaElaboracion').value = new Date().toISOString().slice(0, 10);
                         document.getElementById('partidaPresupuestal').value = DEFAULT_PARTIDA;
                         document.getElementById('articulosContainer').innerHTML = `
@@ -834,7 +1041,6 @@
                             </div>
                         `;
                         document.getElementById('myModal').style.display = 'none';
-                        alert('¡Requisición guardada exitosamente!');
                     } catch (error) {
                         console.error('Error al guardar en Firebase: ', error);
                         alert('Error al intentar guardar la requisición.');
@@ -851,17 +1057,20 @@
         <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
         <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
         <nav>
-            <a href="../html/index.html">Dashboard Principal</a>
-            <a href="../html/pendientes.html">Pendientes Generales</a>
+            <a href="index.html">Dashboard Principal</a>
+            <a href="pendientes.html">Pendientes Generales</a>
         </nav>
-        <button onclick="cerrarSesion()" class="btn-logout">Cerrar sesión</button>
+        <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
+            <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
     </aside>
 
     <!-- ÁREA DE CONTENIDO PRINCIPAL -->
     <main>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <h1>Pendientes Generales</h1>
-            <button class="btn-nueva" onclick="document.getElementById('myModal').style.display='block'">+ Nueva Requisición</button>
+            <button class="btn-nueva" onclick="abrirNuevaRequisicion()">+ Nueva Requisición</button>
         </div>
 
         <!-- Pestañas de Filtro de Estados -->
@@ -869,6 +1078,56 @@
             <button class="tab-btn active" data-filter="Todos" onclick="setFilter('Todos')">Todos</button>
             <button class="tab-btn" data-filter="Pendiente" onclick="setFilter('Pendiente')">Pendientes</button>
             <button class="tab-btn" data-filter="Completado" onclick="setFilter('Completado')">Completados</button>
+        </div>
+
+        <!-- Búsqueda y filtros de requisiciones -->
+        <div class="filters-panel">
+            <div class="filters-grid">
+                <div>
+                    <label>Buscar por folio, concepto, área o artículo:</label>
+                    <input type="text" id="searchInput" placeholder="Ej. Base-Pac-260620, máquinas, bomba..." oninput="aplicarFiltrosBusqueda()">
+                </div>
+                <div>
+                    <label>Departamento:</label>
+                    <select id="filterDepartamento" onchange="aplicarFiltrosBusqueda()">
+                        <option value="Todos">Todos</option>
+                        <option value="Máquinas">Máquinas</option>
+                        <option value="Cubierta">Cubierta</option>
+                        <option value="Base">Base</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Área:</label>
+                    <select id="filterArea" onchange="aplicarFiltrosBusqueda()">
+                        <option value="Todos">Todas</option>
+                        <option value="B/O El Puma">B/O El Puma</option>
+                        <option value="Base Pacífico">Base Pacífico</option>
+                        <option value="Oficina Central">Oficina Central</option>
+                        <option value="B/O Justo Sierra">B/O Justo Sierra</option>
+                        <option value="Base Golfo de México">Base Golfo de México</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Cotización:</label>
+                    <select id="filterCotizacion" onchange="aplicarFiltrosBusqueda()">
+                        <option value="Todos">Todas</option>
+                        <option value="Provisional">Provisional</option>
+                        <option value="Final">Final</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Tipo compra:</label>
+                    <select id="filterTipoCompra" onchange="aplicarFiltrosBusqueda()">
+                        <option value="Todos">Todos</option>
+                        <option value="Nacional">Nacional</option>
+                        <option value="Extranjera">Extranjera</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div class="filter-results" id="contadorFiltros">Mostrando 0 requisiciones</div>
+                <button class="tab-btn" onclick="limpiarFiltrosBusqueda()" style="font-size:0.85rem; padding:8px 14px;">Limpiar filtros</button>
+            </div>
         </div>
 
         <!-- Tabla Estilizada con el CSS centralizado -->
@@ -889,7 +1148,7 @@
         <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
             <span class="close-btn" onclick="this.parentElement.parentElement.style.display='none'">&times;</span>
             
-            <h2 style="font-size: 1.4rem; color: #002147; margin-bottom: 5px;">Formato de Requisición</h2>
+            <h2 id="modalTitle" style="font-size: 1.4rem; color: #002147; margin-bottom: 5px;">Formato de Requisición</h2>
             <p style="color:#64748b; font-size:0.85rem; margin-bottom: 15px;">Coordinación de Plataformas Oceanográficas - Plantilla Base Mazatlán</p>
             <hr style="margin-bottom: 20px; border: 0; border-top: 1px solid #e2e8f0;">
 
@@ -980,7 +1239,7 @@
                 </div>
 
                 <!-- Botón de Envío -->
-                <button type="submit" class="btn-nueva" style="width: 100%; padding: 14px; font-size: 1rem;">Guardar y Registrar Requisición</button>
+                <button id="submitBtn" type="submit" class="btn-nueva" style="width: 100%; padding: 14px; font-size: 1rem;">Guardar y Registrar Requisición</button>
             </form>
         </div>
     </div>
