@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SistemaCopo - Inventario de Almacén</title>
+    <link rel="stylesheet" href="../css/style.css">
+
+    <style>
+        .toolbar-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            margin-top: 20px;
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+            align-items: end;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #334155;
+            font-size: 0.9rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            font-family: inherit;
+            font-size: 0.95rem;
+            background: white;
+        }
+
+        .btn-table {
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            font-weight: 600;
+            font-size: 0.82rem;
+            transition: 0.2s;
+            margin: 2px;
+        }
+
+        .btn-table:hover {
+            background: #f8fafc;
+            border-color: #94a3b8;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .badge-ok { background: #dcfce7; color: #166534; }
+        .badge-low { background: #fef3c7; color: #92400e; }
+        .badge-out { background: #fee2e2; color: #991b1b; }
+
+        .historial-item {
+            border-left: 4px solid #002147;
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .historial-item strong {
+            color: #002147;
+        }
+
+        .summary-line {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .qty-input {
+            width: 90px;
+            padding: 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+        }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
+            authDomain: "sistemacopo-171ca.firebaseapp.com",
+            projectId: "sistemacopo-171ca",
+            storageBucket: "sistemacopo-171ca.firebasestorage.app",
+            messagingSenderId: "193935838790",
+            appId: "1:193935838790:web:40075e51d34af011fa8447",
+            measurementId: "G-Y4S9PTPRG3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let inventarioData = [];
+        let editId = null;
+        let usuarioActual = "Usuario";
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                window.location.href = "login.html";
+            } else {
+                usuarioActual = user.email || "Usuario";
+                const userEmail = document.getElementById('userEmail');
+                if (userEmail) userEmail.innerText = usuarioActual;
+            }
+        });
+
+        window.cerrarSesion = async () => {
+            await signOut(auth);
+            window.location.href = "login.html";
+        };
+
+        const inventarioQuery = query(collection(db, "inventario"), orderBy("fechaRegistro", "desc"));
+        onSnapshot(inventarioQuery, (snapshot) => {
+            inventarioData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderInventario();
+        }, (error) => {
+            console.error("Error al leer inventario:", error);
+            alert("No se pudo cargar inventario. Revisa las reglas de Firestore para la colección inventario.");
+        });
+
+        function fechaTexto(valor) {
+            if (!valor) return new Date().toLocaleString('es-MX');
+            if (valor.seconds) return new Date(valor.seconds * 1000).toLocaleString('es-MX');
+            try { return new Date(valor).toLocaleString('es-MX'); } catch(e) { return String(valor); }
+        }
+
+        function obtenerEstado(item) {
+            const cantidad = Number(item.cantidadActual || 0);
+            const minimo = Number(item.cantidadMinima || 0);
+            if (cantidad <= 0) return { texto: "Agotado", clase: "badge-out" };
+            if (cantidad <= minimo) return { texto: "Bajo stock", clase: "badge-low" };
+            return { texto: "Disponible", clase: "badge-ok" };
+        }
+
+        function normalizar(txt) {
+            return String(txt || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        window.renderInventario = function() {
+            const tbody = document.getElementById('inventarioBody');
+            const contador = document.getElementById('contadorInventario');
+            if (!tbody) return;
+
+            const busqueda = normalizar(document.getElementById('buscarInventario')?.value || '');
+            const filtroCategoria = document.getElementById('filtroCategoria')?.value || 'Todos';
+            const filtroEstado = document.getElementById('filtroEstado')?.value || 'Todos';
+
+            let filtrado = inventarioData.filter(item => {
+                const estado = obtenerEstado(item).texto;
+                const textoBase = normalizar(`${item.codigo} ${item.nombre} ${item.descripcion} ${item.categoria} ${item.ubicacion}`);
+                const coincideBusqueda = !busqueda || textoBase.includes(busqueda);
+                const coincideCategoria = filtroCategoria === 'Todos' || item.categoria === filtroCategoria;
+                const coincideEstado = filtroEstado === 'Todos' || estado === filtroEstado;
+                return coincideBusqueda && coincideCategoria && coincideEstado;
+            });
+
+            tbody.innerHTML = '';
+            filtrado.forEach(item => {
+                const estado = obtenerEstado(item);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${item.codigo || ''}</strong></td>
+                    <td>
+                        <strong>${item.nombre || ''}</strong><br>
+                        <span style="color:#64748b; font-size:0.85rem;">${item.descripcion || ''}</span>
+                    </td>
+                    <td>${item.categoria || ''}</td>
+                    <td>${item.unidadMedida || ''}</td>
+                    <td style="font-weight:700;">${item.cantidadActual ?? 0}</td>
+                    <td>${item.cantidadMinima ?? 0}</td>
+                    <td>${item.ubicacion || ''}</td>
+                    <td><span class="badge ${estado.clase}">${estado.texto}</span></td>
+                    <td>
+                        <button class="btn-table" style="border-color:#002147; color:#002147;" onclick="abrirMovimiento('${item.id}', 'entrada')">+ Entrada</button>
+                        <button class="btn-table" style="border-color:#f59e0b; color:#92400e;" onclick="abrirMovimiento('${item.id}', 'salida')">- Salida</button>
+                        <button class="btn-table" onclick="editarProducto('${item.id}')">✏️ Editar</button>
+                        <button class="btn-table" onclick="verHistorial('${item.id}')">🕓 Historial</button>
+                        <button class="btn-table" style="border-color:#ef4444; color:#ef4444;" onclick="eliminarProducto('${item.id}')">🗑️ Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            contador.innerText = `Mostrando ${filtrado.length} de ${inventarioData.length} productos registrados.`;
+            actualizarMetricasInventario();
+        };
+
+        function actualizarMetricasInventario() {
+            const total = inventarioData.length;
+            const bajo = inventarioData.filter(i => obtenerEstado(i).texto === 'Bajo stock').length;
+            const agotado = inventarioData.filter(i => obtenerEstado(i).texto === 'Agotado').length;
+            const piezas = inventarioData.reduce((acc, i) => acc + Number(i.cantidadActual || 0), 0);
+
+            document.getElementById('txtProductos').innerText = total;
+            document.getElementById('txtBajoStock').innerText = bajo;
+            document.getElementById('txtAgotados').innerText = agotado;
+            document.getElementById('txtExistencias').innerText = piezas;
+        }
+
+        window.limpiarFiltrosInventario = () => {
+            document.getElementById('buscarInventario').value = '';
+            document.getElementById('filtroCategoria').value = 'Todos';
+            document.getElementById('filtroEstado').value = 'Todos';
+            renderInventario();
+        };
+
+        window.abrirNuevoProducto = () => {
+            editId = null;
+            document.getElementById('modalTitle').innerText = 'Registrar producto en almacén';
+            document.getElementById('inventarioForm').reset();
+            document.getElementById('productoModal').style.display = 'block';
+        };
+
+        window.editarProducto = (id) => {
+            const item = inventarioData.find(i => i.id === id);
+            if (!item) return;
+            editId = id;
+            document.getElementById('modalTitle').innerText = 'Editar producto de almacén';
+            document.getElementById('codigo').value = item.codigo || '';
+            document.getElementById('nombre').value = item.nombre || '';
+            document.getElementById('descripcion').value = item.descripcion || '';
+            document.getElementById('categoria').value = item.categoria || 'Máquinas';
+            document.getElementById('unidadMedida').value = item.unidadMedida || 'Pieza';
+            document.getElementById('cantidadActual').value = item.cantidadActual ?? 0;
+            document.getElementById('cantidadMinima').value = item.cantidadMinima ?? 0;
+            document.getElementById('ubicacion').value = item.ubicacion || '';
+            document.getElementById('productoModal').style.display = 'block';
+        };
+
+        window.eliminarProducto = async (id) => {
+            const item = inventarioData.find(i => i.id === id);
+            if (!item) return;
+            const ok = confirm(`¿Eliminar el producto ${item.codigo} - ${item.nombre}?`);
+            if (!ok) return;
+            await deleteDoc(doc(db, "inventario", id));
+        };
+
+        window.abrirMovimiento = (id, tipo) => {
+            const item = inventarioData.find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('movProductoId').value = id;
+            document.getElementById('movTipo').value = tipo;
+            document.getElementById('movCantidad').value = '';
+            document.getElementById('movNota').value = '';
+            document.getElementById('movTitle').innerText = tipo === 'entrada' ? 'Registrar entrada de almacén' : 'Registrar salida de almacén';
+            document.getElementById('movProductoTexto').innerText = `${item.codigo || ''} - ${item.nombre || ''} | Existencia actual: ${item.cantidadActual ?? 0}`;
+            document.getElementById('movimientoModal').style.display = 'block';
+        };
+
+        window.verHistorial = (id) => {
+            const item = inventarioData.find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('historialTitle').innerText = `Historial: ${item.codigo || ''} - ${item.nombre || ''}`;
+            const box = document.getElementById('historialContenido');
+            const historial = Array.isArray(item.historial) ? [...item.historial].reverse() : [];
+            if (historial.length === 0) {
+                box.innerHTML = '<p style="color:#64748b;">Este producto todavía no tiene movimientos registrados.</p>';
+            } else {
+                box.innerHTML = historial.map(h => `
+                    <div class="historial-item">
+                        <strong>${h.accion || 'Movimiento'}</strong><br>
+                        <span>${h.detalle || ''}</span><br>
+                        <span style="color:#64748b; font-size:0.85rem;">Usuario: ${h.usuario || 'No registrado'} | Fecha: ${fechaTexto(h.fecha)}</span>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('historialModal').style.display = 'block';
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('buscarInventario').addEventListener('input', renderInventario);
+            document.getElementById('filtroCategoria').addEventListener('change', renderInventario);
+            document.getElementById('filtroEstado').addEventListener('change', renderInventario);
+
+            document.getElementById('inventarioForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const producto = {
+                    codigo: document.getElementById('codigo').value.trim(),
+                    nombre: document.getElementById('nombre').value.trim(),
+                    descripcion: document.getElementById('descripcion').value.trim(),
+                    categoria: document.getElementById('categoria').value,
+                    unidadMedida: document.getElementById('unidadMedida').value.trim(),
+                    cantidadActual: Number(document.getElementById('cantidadActual').value),
+                    cantidadMinima: Number(document.getElementById('cantidadMinima').value),
+                    ubicacion: document.getElementById('ubicacion').value.trim(),
+                    ultimaModificacion: new Date(),
+                    modificadoPor: usuarioActual
+                };
+
+                if (editId) {
+                    const anterior = inventarioData.find(i => i.id === editId);
+                    const historialAnterior = Array.isArray(anterior?.historial) ? anterior.historial : [];
+                    await updateDoc(doc(db, "inventario", editId), {
+                        ...producto,
+                        historial: [...historialAnterior, {
+                            accion: "Edición",
+                            detalle: "El producto fue modificado desde Inventario de Almacén.",
+                            usuario: usuarioActual,
+                            fecha: new Date()
+                        }]
+                    });
+                    alert('Producto actualizado correctamente.');
+                } else {
+                    await addDoc(collection(db, "inventario"), {
+                        ...producto,
+                        fechaRegistro: new Date(),
+                        registradoPor: usuarioActual,
+                        historial: [{
+                            accion: "Registro",
+                            detalle: `Producto registrado con existencia inicial de ${producto.cantidadActual} ${producto.unidadMedida}.`,
+                            usuario: usuarioActual,
+                            fecha: new Date()
+                        }]
+                    });
+                    alert('Producto registrado correctamente.');
+                }
+
+                document.getElementById('productoModal').style.display = 'none';
+                e.target.reset();
+                editId = null;
+            });
+
+            document.getElementById('movimientoForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = document.getElementById('movProductoId').value;
+                const tipo = document.getElementById('movTipo').value;
+                const cantidad = Number(document.getElementById('movCantidad').value);
+                const nota = document.getElementById('movNota').value.trim();
+                const item = inventarioData.find(i => i.id === id);
+                if (!item || cantidad <= 0) return;
+
+                const actual = Number(item.cantidadActual || 0);
+                let nuevaCantidad = tipo === 'entrada' ? actual + cantidad : actual - cantidad;
+
+                if (tipo === 'salida' && nuevaCantidad < 0) {
+                    alert('No puedes registrar una salida mayor a la existencia actual.');
+                    return;
+                }
+
+                const historialAnterior = Array.isArray(item.historial) ? item.historial : [];
+                const accion = tipo === 'entrada' ? 'Entrada de almacén' : 'Salida de almacén';
+                const signo = tipo === 'entrada' ? '+' : '-';
+                await updateDoc(doc(db, "inventario", id), {
+                    cantidadActual: nuevaCantidad,
+                    ultimaModificacion: new Date(),
+                    modificadoPor: usuarioActual,
+                    historial: [...historialAnterior, {
+                        accion,
+                        detalle: `${signo}${cantidad} ${item.unidadMedida || ''}. Existencia anterior: ${actual}. Nueva existencia: ${nuevaCantidad}. ${nota ? 'Nota: ' + nota : ''}`,
+                        usuario: usuarioActual,
+                        fecha: new Date()
+                    }]
+                });
+
+                document.getElementById('movimientoModal').style.display = 'none';
+                e.target.reset();
+            });
+        });
+    </script>
+</head>
+<body>
+
+    <aside>
+        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
+        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
+        <nav>
+            <a href="index.html">Dashboard Principal</a>
+            <a href="pendientes.html">Pendientes Generales</a>
+            <a href="inventario.html">Inventario de Almacén</a>
+        </nav>
+        <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
+            <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
+    </aside>
+
+    <main>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:15px; flex-wrap:wrap;">
+            <div>
+                <h1>Inventario de Almacén</h1>
+                <p style="color:#64748b; font-size:0.9rem; margin-top:4px;">Control de existencias, entradas, salidas y ubicación de productos.</p>
+            </div>
+            <button class="btn-nueva" onclick="abrirNuevoProducto()">+ Nuevo Producto</button>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h4>Productos Registrados</h4>
+                <p id="txtProductos">0</p>
+            </div>
+            <div class="metric-card" style="border-left-color:#f59e0b;">
+                <h4>Bajo Stock</h4>
+                <p id="txtBajoStock" style="color:#f59e0b;">0</p>
+            </div>
+            <div class="metric-card" style="border-left-color:#ef4444;">
+                <h4>Agotados</h4>
+                <p id="txtAgotados" style="color:#ef4444;">0</p>
+            </div>
+            <div class="metric-card" style="border-left-color:#10b981;">
+                <h4>Existencias Totales</h4>
+                <p id="txtExistencias" style="color:#10b981;">0</p>
+            </div>
+        </div>
+
+        <div class="toolbar-card">
+            <div class="filters-grid">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Buscar</label>
+                    <input id="buscarInventario" class="form-control" type="text" placeholder="Código, producto, descripción o ubicación...">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Categoría</label>
+                    <select id="filtroCategoria" class="form-control">
+                        <option value="Todos">Todas</option>
+                        <option value="Máquinas">Máquinas</option>
+                        <option value="Cubierta">Cubierta</option>
+                        <option value="Base">Base</option>
+                        <option value="Herramientas">Herramientas</option>
+                        <option value="Consumibles">Consumibles</option>
+                        <option value="Limpieza">Limpieza</option>
+                        <option value="Seguridad">Seguridad</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Estado</label>
+                    <select id="filtroEstado" class="form-control">
+                        <option value="Todos">Todos</option>
+                        <option value="Disponible">Disponible</option>
+                        <option value="Bajo stock">Bajo stock</option>
+                        <option value="Agotado">Agotado</option>
+                    </select>
+                </div>
+                <button type="button" onclick="limpiarFiltrosInventario()" class="tab-btn" style="height:42px;">Limpiar filtros</button>
+            </div>
+            <p id="contadorInventario" class="summary-line">Mostrando 0 productos registrados.</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>U.M.</th>
+                    <th>Cantidad</th>
+                    <th>Mínimo</th>
+                    <th>Ubicación</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="inventarioBody"></tbody>
+        </table>
+    </main>
+
+    <div id="productoModal" class="modal">
+        <div class="modal-content" style="max-height:90vh; overflow-y:auto;">
+            <span class="close-btn" onclick="document.getElementById('productoModal').style.display='none'">&times;</span>
+            <h2 id="modalTitle" style="font-size:1.4rem; color:#002147; margin-bottom:5px;">Registrar producto en almacén</h2>
+            <p style="color:#64748b; font-size:0.85rem; margin-bottom:15px;">Captura los datos del producto para controlar existencias.</p>
+            <hr style="margin-bottom:20px; border:0; border-top:1px solid #e2e8f0;">
+
+            <form id="inventarioForm">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="form-group">
+                        <label>Código:</label>
+                        <input id="codigo" class="form-control" type="text" placeholder="Ej. MAT-001" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre del producto:</label>
+                        <input id="nombre" class="form-control" type="text" placeholder="Ej. Filtro de aceite" required>
+                    </div>
+                    <div class="form-group" style="grid-column:1 / -1;">
+                        <label>Descripción:</label>
+                        <textarea id="descripcion" class="form-control" rows="2" placeholder="Detalles o especificaciones..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría:</label>
+                        <select id="categoria" class="form-control" required>
+                            <option value="Máquinas">Máquinas</option>
+                            <option value="Cubierta">Cubierta</option>
+                            <option value="Base">Base</option>
+                            <option value="Herramientas">Herramientas</option>
+                            <option value="Consumibles">Consumibles</option>
+                            <option value="Limpieza">Limpieza</option>
+                            <option value="Seguridad">Seguridad</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Unidad de medida:</label>
+                        <input id="unidadMedida" class="form-control" type="text" placeholder="Pieza, litro, caja..." value="Pieza" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad actual:</label>
+                        <input id="cantidadActual" class="form-control" type="number" min="0" value="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Cantidad mínima:</label>
+                        <input id="cantidadMinima" class="form-control" type="number" min="0" value="0" required>
+                    </div>
+                    <div class="form-group" style="grid-column:1 / -1;">
+                        <label>Ubicación en almacén:</label>
+                        <input id="ubicacion" class="form-control" type="text" placeholder="Ej. Estante A-2, bodega, gabinete...">
+                    </div>
+                </div>
+                <button type="submit" class="btn-nueva" style="width:100%; padding:14px; font-size:1rem; margin-top:10px;">Guardar producto</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="movimientoModal" class="modal">
+        <div class="modal-content" style="max-width:520px;">
+            <span class="close-btn" onclick="document.getElementById('movimientoModal').style.display='none'">&times;</span>
+            <h2 id="movTitle" style="font-size:1.4rem; color:#002147; margin-bottom:5px;">Movimiento de almacén</h2>
+            <p id="movProductoTexto" style="color:#64748b; font-size:0.9rem; margin-bottom:18px;"></p>
+
+            <form id="movimientoForm">
+                <input type="hidden" id="movProductoId">
+                <input type="hidden" id="movTipo">
+                <div class="form-group">
+                    <label>Cantidad:</label>
+                    <input id="movCantidad" class="form-control" type="number" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Nota:</label>
+                    <textarea id="movNota" class="form-control" rows="3" placeholder="Motivo, referencia o comentario..."></textarea>
+                </div>
+                <button type="submit" class="btn-nueva" style="width:100%; padding:14px;">Guardar movimiento</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="historialModal" class="modal">
+        <div class="modal-content" style="max-width:650px; max-height:85vh; overflow-y:auto;">
+            <span class="close-btn" onclick="document.getElementById('historialModal').style.display='none'">&times;</span>
+            <h2 id="historialTitle" style="font-size:1.4rem; color:#002147; margin-bottom:15px;">Historial</h2>
+            <div id="historialContenido"></div>
+        </div>
+    </div>
+
+</body>
+</html>
