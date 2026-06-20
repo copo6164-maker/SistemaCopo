@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SistemaCopo - B/O El Puma</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <aside>
+        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
+        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
+      <nav>
+    <a href="../html/index.html" style="text-decoration: none; color: #cbd5e1; display: block; padding: 10px 0;">
+        Dashboard Principal
+    </a>
+    <a href="../html/pendientes.html" style="text-decoration: none; color: #cbd5e1; display: block; padding: 10px 0;">
+        Pendientes Generales
+    </a>
+</nav>
+
+    </aside>
+
+    <main>
+        <h1>Dashboard Principal</h1>
+        
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h4>Requisiciones Activas</h4>
+                <p>42</p>
+            </div>
+            <div class="metric-card" style="border-left-color: #ef4444;">
+                <h4>Sin Cotizar</h4>
+                <p style="color: #ef4444;">6</p>
+            </div>
+            <div class="metric-card" style="border-left-color: #f59e0b;">
+                <h4>Cotización Incompleta</h4>
+                <p style="color: #f59e0b;">4</p>
+            </div>
+            <div class="metric-card" style="border-left-color: #10b981;">
+                <h4>Solicitud Compra</h4>
+                <p style="color: #10b981;">3</p>
+            </div>
+        </div>
+
+        <div class="finance-charts">
+            <div class="chart-box">
+                <h3>Gasto por Área</h3>
+                <canvas id="areaChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3>Gasto por Proveedor</h3>
+                <canvas id="proveedorChart"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3>Pagado vs Pendiente</h3>
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Gráfico de Pastel: Gasto por Área
+        new Chart(document.getElementById('areaChart'), {
+            type: 'pie',
+            data: {
+                labels: ['Máquinas', 'Cubierta', 'Base'],
+                datasets: [{
+                    data: [35, 20, 15],
+                    backgroundColor: ['#002147', '#C9A227', '#64748b']
+                }]
+            }
+        });
+
+        // Gráfico de Barras: Gasto por Proveedor
+        new Chart(document.getElementById('proveedorChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Prov 1', 'Prov 2', 'Prov 3'],
+                datasets: [{
+                    label: 'MXN',
+                    data: [28, 18, 15],
+                    backgroundColor: '#002147'
+                }]
+            }
+        });
+
+        // Gráfico de Dona: Pagado vs Pendiente
+        new Chart(document.getElementById('statusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Pagado', 'Pendiente'],
+                datasets: [{
+                    data: [68, 32],
+                    backgroundColor: ['#10b981', '#ef4444']
+                }]
+            }
+        });
+    </script>
+
+</body>
+</html>
