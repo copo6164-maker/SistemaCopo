@@ -1,0 +1,19 @@
+# Logs y depuración
+firebase-debug.log
+*.log
+
+# Dependencias locales
+node_modules/
+
+# Configuración local de editores
+.vscode/
+.idea/
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos generados por el usuario
+Req_Base-*.xlsx
+Requisicion_*.xlsx
+*.tmp
