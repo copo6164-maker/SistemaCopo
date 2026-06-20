@@ -158,7 +158,41 @@
         let filterArea = 'Todos';
         let filterTipoCompra = 'Todos';
         let filterCotizacion = 'Todos';
+        let filterSeguimiento = 'Todos';
         let editingId = null;
+
+        const ESTADOS_SEGUIMIENTO = [
+            'Sin cotizar',
+            'Cotización provisional',
+            'Cotización final',
+            'Solicitud de compra',
+            'Comprado',
+            'Entregado',
+            'Completado',
+            'Cancelado'
+        ];
+
+        function obtenerEstadoSeguimiento(item) {
+            if (item.estadoSeguimiento) return item.estadoSeguimiento;
+            if (item.status === 'Completado') return 'Completado';
+            if (item.cotizacion === 'Provisional') return 'Cotización provisional';
+            if (item.cotizacion === 'Final') return 'Cotización final';
+            return 'Sin cotizar';
+        }
+
+        function colorEstadoSeguimiento(estado) {
+            const colores = {
+                'Sin cotizar': '#ef4444',
+                'Cotización provisional': '#f59e0b',
+                'Cotización final': '#0ea5e9',
+                'Solicitud de compra': '#8b5cf6',
+                'Comprado': '#14b8a6',
+                'Entregado': '#22c55e',
+                'Completado': '#10b981',
+                'Cancelado': '#64748b'
+            };
+            return colores[estado] || '#64748b';
+        }
 
         const DEFAULT_PARTIDA = '411. Artículos, materiales y útiles diversos.';
         const TEMPLATE_URL = '../assets/templates/Req.%20Base%20Mazatl%C3%A1n.xlsx';
@@ -247,6 +281,7 @@
                 tipoCompra: item.tipoCompra || 'Nacional',
                 atendidoPor: item.atendidoPor || 'Base',
                 cotizacion: item.cotizacion || 'Final',
+                estadoSeguimiento: obtenerEstadoSeguimiento(item),
                 observaciones: item.observaciones || '',
                 articulos: item.articulos && item.articulos.length
                     ? item.articulos
@@ -271,13 +306,14 @@
             filterArea = document.getElementById('filterArea')?.value || 'Todos';
             filterTipoCompra = document.getElementById('filterTipoCompra')?.value || 'Todos';
             filterCotizacion = document.getElementById('filterCotizacion')?.value || 'Todos';
+            filterSeguimiento = document.getElementById('filterSeguimiento')?.value || 'Todos';
             render();
         };
 
         window.limpiarFiltrosAvanzados = () => {
             const searchInput = document.getElementById('searchInput');
             if (searchInput) searchInput.value = '';
-            ['filterDepartamento', 'filterArea', 'filterTipoCompra', 'filterCotizacion'].forEach(id => {
+            ['filterDepartamento', 'filterArea', 'filterTipoCompra', 'filterCotizacion', 'filterSeguimiento'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = 'Todos';
             });
@@ -286,12 +322,31 @@
             filterArea = 'Todos';
             filterTipoCompra = 'Todos';
             filterCotizacion = 'Todos';
+            filterSeguimiento = 'Todos';
             render();
         };
 
         // Marcar tarea o requisición como completada
         window.complete = async (id) => { 
-            await updateDoc(doc(db, 'tareas', id), { status: 'Completado' }); 
+            await updateDoc(doc(db, 'tareas', id), {
+                status: 'Completado',
+                estadoSeguimiento: 'Completado',
+                updatedAt: new Date()
+            }); 
+        };
+
+        window.cambiarEstadoSeguimiento = async (id, nuevoEstado) => {
+            try {
+                const nuevoStatus = nuevoEstado === 'Completado' || nuevoEstado === 'Cancelado' ? 'Completado' : 'Pendiente';
+                await updateDoc(doc(db, 'tareas', id), {
+                    estadoSeguimiento: nuevoEstado,
+                    status: nuevoStatus,
+                    updatedAt: new Date()
+                });
+            } catch (error) {
+                console.error('Error al cambiar estado:', error);
+                alert('No se pudo actualizar el estado de seguimiento.');
+            }
         };
 
         window.deleteRequisicion = async (id) => {
@@ -317,6 +372,7 @@
             document.getElementById('submitBtn').innerText = 'Guardar y Registrar Requisición';
             document.getElementById('fechaElaboracion').value = new Date().toISOString().slice(0, 10);
             document.getElementById('partidaPresupuestal').value = DEFAULT_PARTIDA;
+            document.getElementById('estadoSeguimiento').value = 'Sin cotizar';
             document.getElementById('articulosContainer').innerHTML = `
                 <div class="articulo-row">
                     <input type="text" placeholder="Concepto / Descripción" class="form-control" style="flex: 2;" required>
@@ -348,6 +404,7 @@
             document.getElementById('atendidoPor').value = datos.atendidoPor;
             document.getElementById('tipoCompra').value = datos.tipoCompra;
             document.getElementById('cotizacion').value = datos.cotizacion;
+            document.getElementById('estadoSeguimiento').value = datos.estadoSeguimiento || obtenerEstadoSeguimiento(item);
             document.getElementById('observaciones').value = datos.observaciones || '';
 
             const container = document.getElementById('articulosContainer');
@@ -873,6 +930,7 @@
                 const area = item.area || '';
                 const tipoCompra = item.tipoCompra || '';
                 const cotizacion = item.cotizacion || '';
+                const estadoSeguimiento = obtenerEstadoSeguimiento(item);
                 const articulosTexto = (item.articulos || [])
                     .map(a => `${a.concepto || ''} ${a.justificacion || ''} ${a.um || ''}`)
                     .join(' ');
@@ -884,6 +942,7 @@
                     area,
                     tipoCompra,
                     cotizacion,
+                    estadoSeguimiento,
                     item.observaciones || '',
                     articulosTexto
                 ].join(' ').toLowerCase();
@@ -894,8 +953,9 @@
                 const pasaArea = filterArea === 'Todos' || area === filterArea;
                 const pasaTipo = filterTipoCompra === 'Todos' || tipoCompra === filterTipoCompra;
                 const pasaCotizacion = filterCotizacion === 'Todos' || cotizacion === filterCotizacion;
+                const pasaSeguimiento = filterSeguimiento === 'Todos' || estadoSeguimiento === filterSeguimiento;
 
-                return pasaEstado && pasaBusqueda && pasaDepartamento && pasaArea && pasaTipo && pasaCotizacion;
+                return pasaEstado && pasaBusqueda && pasaDepartamento && pasaArea && pasaTipo && pasaCotizacion && pasaSeguimiento;
             });
 
             const contador = document.getElementById('contadorResultados');
@@ -905,7 +965,7 @@
 
             if (filtered.length === 0) {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td colspan="6" style="text-align:center; color:#64748b; padding:24px;">No se encontraron requisiciones con esos filtros.</td>`;
+                row.innerHTML = `<td colspan="7" style="text-align:center; color:#64748b; padding:24px;">No se encontraron requisiciones con esos filtros.</td>`;
                 tbody.appendChild(row);
                 return;
             }
@@ -917,11 +977,18 @@
                 const departamento = item.departamento || 'N/A';
                 const area = item.area || 'N/A';
                 const cotizacion = item.cotizacion || 'N/A';
+                const estadoSeguimiento = obtenerEstadoSeguimiento(item);
+                const opcionesEstado = ESTADOS_SEGUIMIENTO.map(e => `<option value="${escapeHTML(e)}" ${e === estadoSeguimiento ? 'selected' : ''}>${escapeHTML(e)}</option>`).join('');
                 row.innerHTML = `
                     <td style="font-weight:700; color:#002147;">${escapeHTML(folio)}</td>
                     <td class="${estado === 'Completado' ? 'status-comp' : ''}">${escapeHTML(item.desc || 'Requisición')}<br><small style="color:#64748b;">${escapeHTML(area)}</small></td>
                     <td>${escapeHTML(departamento)}</td>
                     <td>${escapeHTML(cotizacion)}</td>
+                    <td>
+                        <select onchange="cambiarEstadoSeguimiento('${item.id}', this.value)" class="form-control" style="min-width:180px; border-color:${colorEstadoSeguimiento(estadoSeguimiento)}; color:${colorEstadoSeguimiento(estadoSeguimiento)}; font-weight:700; padding:6px;">
+                            ${opcionesEstado}
+                        </select>
+                    </td>
                     <td><span style="font-weight:600; color: ${estado === 'Completado' ? '#10b981' : '#f59e0b'}">${escapeHTML(estado)}</span></td>
                     <td>
                         <button onclick="descargarExcelRequisicion('${item.id}')" class="btn-table" style="border-color: #10b981; color: #047857;">📥 Excel</button>
@@ -961,6 +1028,7 @@
                     const tipoCompra = document.getElementById('tipoCompra').value;
                     const atendidoPor = document.getElementById('atendidoPor').value;
                     const cotizacion = document.getElementById('cotizacion').value;
+                    const estadoSeguimiento = document.getElementById('estadoSeguimiento').value;
                     const observaciones = document.getElementById('observaciones').value;
                     
                     // Recopilar todos los artículos de las filas dinámicas
@@ -999,6 +1067,8 @@
                             tipoCompra,
                             atendidoPor,
                             cotizacion,
+                            estadoSeguimiento,
+                            status: estadoSeguimiento === 'Completado' || estadoSeguimiento === 'Cancelado' ? 'Completado' : 'Pendiente',
                             articulos,
                             observaciones,
                             updatedAt: new Date()
@@ -1010,7 +1080,6 @@
                         } else {
                             await addDoc(collection(db, 'tareas'), {
                                 ...datosGuardar,
-                                status: 'Pendiente',
                                 timestamp: new Date()
                             });
                             alert('¡Requisición guardada exitosamente!');
@@ -1023,6 +1092,7 @@
                         document.getElementById('submitBtn').innerText = 'Guardar y Registrar Requisición';
                         document.getElementById('fechaElaboracion').value = new Date().toISOString().slice(0, 10);
                         document.getElementById('partidaPresupuestal').value = DEFAULT_PARTIDA;
+                        document.getElementById('estadoSeguimiento').value = 'Sin cotizar';
                         document.getElementById('articulosContainer').innerHTML = `
                             <div class="articulo-row">
                                 <input type="text" placeholder="Concepto / Descripción" class="form-control" style="flex: 2;" required>
@@ -1110,6 +1180,20 @@
                         <option value="Final">Final</option>
                     </select>
                 </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Seguimiento:</label>
+                    <select id="filterSeguimiento" class="form-control" onchange="aplicarFiltrosAvanzados()">
+                        <option value="Todos">Todos</option>
+                        <option value="Sin cotizar">Sin cotizar</option>
+                        <option value="Cotización provisional">Cotización provisional</option>
+                        <option value="Cotización final">Cotización final</option>
+                        <option value="Solicitud de compra">Solicitud de compra</option>
+                        <option value="Comprado">Comprado</option>
+                        <option value="Entregado">Entregado</option>
+                        <option value="Completado">Completado</option>
+                        <option value="Cancelado">Cancelado</option>
+                    </select>
+                </div>
                 <div class="filter-actions">
                     <button type="button" class="btn-limpiar" onclick="limpiarFiltrosAvanzados()">Limpiar</button>
                 </div>
@@ -1125,6 +1209,7 @@
                     <th>Tarea / Concepto</th>
                     <th>Departamento</th>
                     <th>Cotización</th>
+                    <th>Seguimiento</th>
                     <th>Estado</th>
                     <th>Acción</th>
                 </tr>
@@ -1203,6 +1288,19 @@
                         <select id="cotizacion" class="form-control">
                             <option value="Final">Final</option>
                             <option value="Provisional">Provisional</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado de seguimiento:</label>
+                        <select id="estadoSeguimiento" class="form-control">
+                            <option value="Sin cotizar">Sin cotizar</option>
+                            <option value="Cotización provisional">Cotización provisional</option>
+                            <option value="Cotización final">Cotización final</option>
+                            <option value="Solicitud de compra">Solicitud de compra</option>
+                            <option value="Comprado">Comprado</option>
+                            <option value="Entregado">Entregado</option>
+                            <option value="Completado">Completado</option>
+                            <option value="Cancelado">Cancelado</option>
                         </select>
                     </div>
                 </div>
