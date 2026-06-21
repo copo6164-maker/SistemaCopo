@@ -33,6 +33,11 @@
         .history-item strong { color:#002147; display:block; margin-bottom:4px; }
         .history-item small { color:#64748b; display:block; margin-top:4px; }
         .empty-state { background:white; border-radius:12px; padding:30px; text-align:center; color:#64748b; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-top:25px; display:none; }
+        .docs-actions { display:flex; gap:10px; flex-wrap:wrap; margin:15px 0; }
+        .doc-item { display:flex; justify-content:space-between; gap:12px; align-items:center; border:1px solid #e2e8f0; background:#f8fafc; border-radius:10px; padding:12px; margin-bottom:10px; }
+        .doc-item strong { color:#002147; display:block; }
+        .doc-item small { color:#64748b; display:block; margin-top:3px; }
+        .doc-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
         @media (max-width: 950px) { .filters-grid { grid-template-columns:1fr; } .top-actions { flex-direction:column; align-items:stretch; } }
     </style>
 
@@ -40,6 +45,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
@@ -54,9 +60,11 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const storage = getStorage(app);
 
         let expedientesData = [];
         let editingId = null;
+        let documentoExpedienteId = null;
         let usuarioActual = "Usuario";
 
         function rutaPorRol(rol) {
@@ -124,6 +132,19 @@
 
         function crearMovimiento(accion, detalle = '') {
             return { accion, detalle, usuario: usuarioActual, fecha: new Date().toISOString() };
+        }
+
+        function bytesTexto(bytes) {
+            const n = Number(bytes || 0);
+            if (n < 1024) return `${n} B`;
+            if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+            return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function nombreSeguro(nombre) {
+            return String(nombre || 'documento')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9._-]/g, '_');
         }
 
         function claseEstatus(estatus) {
@@ -197,6 +218,7 @@
                         <button class="btn-table btn-primary-outline" onclick="imprimirExpediente('${item.id}')">🖨️ Imprimir</button>
                         <button class="btn-table" onclick="editarExpediente('${item.id}')">✏️ Editar</button>
                         <button class="btn-table" onclick="abrirHistorial('${item.id}')">🕓 Historial</button>
+                        <button class="btn-table" onclick="abrirDocumentos('${item.id}')">📎 Documentos</button>
                         <button class="btn-table btn-danger" onclick="eliminarExpediente('${item.id}')">🗑️ Eliminar</button>
                     </td>
                 `;
@@ -272,6 +294,124 @@
             document.getElementById('historialModal').style.display = 'none';
         };
 
+
+        window.abrirDocumentos = (id) => {
+            const item = expedientesData.find(x => x.id === id);
+            if (!item) return alert('No se encontró el expediente.');
+            documentoExpedienteId = id;
+            document.getElementById('documentosTitulo').innerText = `Documentos - ${item.folio || 'Expediente'}`;
+            renderDocumentos(item);
+            document.getElementById('documentosModal').style.display = 'block';
+        };
+
+        window.cerrarDocumentos = () => {
+            documentoExpedienteId = null;
+            document.getElementById('archivoDocumento').value = '';
+            document.getElementById('escaneoDocumento').value = '';
+            document.getElementById('documentosModal').style.display = 'none';
+        };
+
+        function renderDocumentos(item) {
+            const cont = document.getElementById('documentosContenido');
+            const docs = Array.isArray(item.documentos) ? [...item.documentos] : [];
+            if (!docs.length) {
+                cont.innerHTML = '<div class="history-item"><strong>Sin documentos</strong><span>No hay archivos guardados en este expediente.</span></div>';
+                return;
+            }
+            docs.sort((a,b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+            cont.innerHTML = docs.map(d => `
+                <div class="doc-item">
+                    <div>
+                        <strong>${escapeHTML(d.nombre || 'Documento')}</strong>
+                        <small>${escapeHTML(d.origen || 'Archivo')} · ${escapeHTML(bytesTexto(d.tamano))} · ${escapeHTML(d.subidoPor || 'Usuario')} · ${escapeHTML(fechaHoraTexto(d.fecha))}</small>
+                    </div>
+                    <div class="doc-actions">
+                        <a class="btn-table btn-primary-outline" href="${escapeHTML(d.url || '#')}" target="_blank" rel="noopener">👁️ Ver</a>
+                        <button class="btn-table btn-danger" onclick="eliminarDocumento('${escapeHTML(d.id)}')">🗑️ Eliminar</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.subirDocumentoDesdeInput = async (inputId, origen) => {
+            if (!documentoExpedienteId) return alert('Primero abre un expediente.');
+            const input = document.getElementById(inputId);
+            const file = input?.files?.[0];
+            if (!file) return;
+
+            const item = expedientesData.find(x => x.id === documentoExpedienteId);
+            if (!item) return alert('No se encontró el expediente.');
+            if (file.size > 15 * 1024 * 1024) {
+                input.value = '';
+                return alert('El archivo es demasiado grande. Usa archivos menores a 15 MB.');
+            }
+
+            const btn = document.getElementById('estadoSubidaDocs');
+            if (btn) btn.innerText = 'Subiendo documento...';
+            try {
+                const idDoc = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                const safe = nombreSeguro(file.name);
+                const path = `expedientes/${documentoExpedienteId}/${idDoc}_${safe}`;
+                const storageRef = ref(storage, path);
+                await uploadBytes(storageRef, file, { contentType: file.type || 'application/octet-stream' });
+                const url = await getDownloadURL(storageRef);
+
+                const meta = {
+                    id: idDoc,
+                    nombre: file.name,
+                    tipo: file.type || 'archivo',
+                    tamano: file.size,
+                    url,
+                    path,
+                    origen,
+                    fecha: new Date().toISOString(),
+                    subidoPor: usuarioActual
+                };
+
+                await updateDoc(doc(db, 'expedientes', documentoExpedienteId), {
+                    documentos: arrayUnion(meta),
+                    fechaActualizacion: new Date().toISOString(),
+                    actualizadoPor: usuarioActual,
+                    historial: arrayUnion(crearMovimiento('Documento agregado', `${origen}: ${file.name}`))
+                });
+
+                input.value = '';
+                if (btn) btn.innerText = 'Documento guardado correctamente.';
+            } catch (error) {
+                console.error(error);
+                alert('No se pudo subir el documento. Revisa que Firebase Storage esté activado y que las reglas permitan escritura.');
+                if (btn) btn.innerText = 'Error al subir documento.';
+            }
+        };
+
+        window.eliminarDocumento = async (docId) => {
+            if (!documentoExpedienteId) return;
+            const item = expedientesData.find(x => x.id === documentoExpedienteId);
+            if (!item) return;
+            const docs = Array.isArray(item.documentos) ? item.documentos : [];
+            const target = docs.find(d => d.id === docId);
+            if (!target) return;
+            if (!confirm(`¿Eliminar el documento ${target.nombre}?`)) return;
+
+            try {
+                if (target.path) {
+                    try { await deleteObject(ref(storage, target.path)); } catch (e) { console.warn('No se pudo borrar de Storage:', e); }
+                }
+                const nuevos = docs.filter(d => d.id !== docId);
+                await updateDoc(doc(db, 'expedientes', documentoExpedienteId), {
+                    documentos: nuevos,
+                    fechaActualizacion: new Date().toISOString(),
+                    actualizadoPor: usuarioActual,
+                    historial: arrayUnion(crearMovimiento('Documento eliminado', target.nombre || 'Documento'))
+                });
+                const actualizado = { ...item, documentos: nuevos };
+                renderDocumentos(actualizado);
+            } catch (error) {
+                console.error(error);
+                alert('No se pudo eliminar el documento.');
+            }
+        };
+
         window.imprimirExpediente = (id) => {
             const item = expedientesData.find(x => x.id === id);
             if (!item) return;
@@ -294,6 +434,10 @@
                         <tr><td class="lbl">Última actualización</td><td colspan="3">${escapeHTML(fechaHoraTexto(item.fechaActualizacion))}</td></tr>
                     </table>
                     <div class="obs"><strong>Observaciones:</strong><br>${escapeHTML(item.observaciones || 'Sin observaciones.')}</div>
+                    <h3 style="font-size:14px;margin-top:18px;">Documentos adjuntos</h3>
+                    <table><thead><tr><th>Documento</th><th>Tipo</th><th>Subido por</th><th>Fecha</th></tr></thead><tbody>
+                    ${(Array.isArray(item.documentos) ? item.documentos : []).map(d => `<tr><td>${escapeHTML(d.nombre || '')}</td><td>${escapeHTML(d.origen || d.tipo || '')}</td><td>${escapeHTML(d.subidoPor || '')}</td><td>${escapeHTML(fechaHoraTexto(d.fecha))}</td></tr>`).join('') || '<tr><td colspan="4">Sin documentos adjuntos.</td></tr>'}
+                    </tbody></table>
                     <h3 style="font-size:14px;margin-top:18px;">Historial de movimientos</h3>
                     <table><thead><tr><th>Acción</th><th>Detalle</th><th>Usuario</th><th>Fecha</th></tr></thead><tbody>
                     ${historial.map(h => `<tr><td>${escapeHTML(h.accion || '')}</td><td>${escapeHTML(h.detalle || '')}</td><td>${escapeHTML(h.usuario || '')}</td><td>${escapeHTML(fechaHoraTexto(h.fecha))}</td></tr>`).join('') || '<tr><td colspan="4">Sin historial registrado.</td></tr>'}
@@ -450,5 +594,22 @@
             <div id="historialContenido" class="history-list"></div>
         </div>
     </div>
+
+    <div id="documentosModal" class="modal">
+        <div class="modal-content" style="max-width:850px; max-height:90vh; overflow-y:auto;">
+            <span class="close-btn" onclick="cerrarDocumentos()">&times;</span>
+            <h2 id="documentosTitulo" style="font-size:1.4rem; color:#002147; margin-bottom:5px;">Documentos</h2>
+            <p style="color:#64748b; font-size:0.85rem; margin-bottom:15px;">Sube archivos, PDF o usa la cámara para escanear documentos del expediente.</p>
+            <div class="docs-actions">
+                <button type="button" class="btn-nueva" onclick="document.getElementById('archivoDocumento').click()">📎 Subir documento</button>
+                <button type="button" class="btn-nueva" onclick="document.getElementById('escaneoDocumento').click()">📷 Escanear con cámara</button>
+                <span id="estadoSubidaDocs" style="color:#64748b; align-self:center; font-size:0.9rem;"></span>
+            </div>
+            <input id="archivoDocumento" type="file" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="subirDocumentoDesdeInput('archivoDocumento','Documento adjunto')">
+            <input id="escaneoDocumento" type="file" style="display:none" accept="image/*" capture="environment" onchange="subirDocumentoDesdeInput('escaneoDocumento','Escaneo')">
+            <div id="documentosContenido"></div>
+        </div>
+    </div>
+
 </body>
 </html>
