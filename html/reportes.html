@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SistemaCopo - Reportes</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .top-actions { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-bottom:15px; }
+        .filters-card { background:#fff; border-radius:12px; padding:18px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin:20px 0; }
+        .filters-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; align-items:end; }
+        .form-group { margin-bottom:0; }
+        .form-group label { display:block; font-weight:600; margin-bottom:6px; color:#334155; font-size:0.9rem; }
+        .form-control { width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:0.95rem; background:white; }
+        .btn-table { cursor:pointer; padding:8px 12px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:0.85rem; margin-right:6px; }
+        .btn-table:hover { background:#f8fafc; }
+        .empty-state { display:none; text-align:center; color:#64748b; background:#fff; border-radius:12px; padding:25px; margin-top:18px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); }
+        .badge { display:inline-block; padding:5px 10px; border-radius:999px; font-size:0.78rem; font-weight:700; background:#e2e8f0; color:#334155; }
+        .badge-ok { background:#dcfce7; color:#166534; }
+        .badge-warn { background:#fef3c7; color:#92400e; }
+        .badge-bad { background:#fee2e2; color:#991b1b; }
+        .report-title { color:#002147; margin-top:10px; }
+        @media print { aside, .filters-card, .top-actions button { display:none !important; } body { display:block; overflow:auto; background:#fff; } main { padding:20px; max-width:none; } table { box-shadow:none; } }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
+            authDomain: "sistemacopo-171ca.firebaseapp.com",
+            projectId: "sistemacopo-171ca",
+            storageBucket: "sistemacopo-171ca.firebasestorage.app",
+            messagingSenderId: "193935838790",
+            appId: "1:193935838790:web:40075e51d34af011fa8447",
+            measurementId: "G-Y4S9PTPRG3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let tareas = [];
+        let inventario = [];
+        let expedientes = [];
+        let perfilActual = null;
+        let unsubscribeFns = [];
+
+        function rutaPorRol(rol) {
+            rol = String(rol || '').trim().toLowerCase();
+            if (rol === 'administrador') return 'index.html';
+            if (rol === 'compras') return 'pendientes.html';
+            if (rol === 'almacen') return 'inventario.html';
+            if (rol === 'seguimiento') return 'expedientes.html';
+            return 'login.html';
+        }
+
+        async function obtenerPerfil(user) {
+            const email = (user.email || '').trim().toLowerCase();
+            const snap = await getDoc(doc(db, 'usuario', email));
+            if (!snap.exists()) return null;
+            const data = snap.data();
+            return { correo: email, nombre: data.nombre || email, rol: String(data.rol || '').trim().toLowerCase(), activo: data.activo !== false };
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) { window.location.href = 'login.html'; return; }
+            const perfil = await obtenerPerfil(user);
+            if (!perfil || !perfil.activo) { await signOut(auth); window.location.href = 'login.html'; return; }
+            perfilActual = perfil;
+            sessionStorage.setItem('perfilSistemaCopo', JSON.stringify(perfil));
+            if (perfil.rol !== 'administrador') { window.location.href = rutaPorRol(perfil.rol); return; }
+            const userEmail = document.getElementById('userEmail');
+            if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
+            iniciarLecturaReportes();
+        });
+
+        function iniciarLecturaReportes() {
+            unsubscribeFns.forEach(fn => fn && fn());
+            unsubscribeFns = [
+                onSnapshot(collection(db, 'tareas'), snap => { tareas = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); }),
+                onSnapshot(collection(db, 'inventario'), snap => { inventario = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); }),
+                onSnapshot(collection(db, 'expedientes'), snap => { expedientes = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); })
+            ];
+        }
+
+        window.cerrarSesion = async () => {
+            sessionStorage.removeItem('perfilSistemaCopo');
+            await signOut(auth);
+            window.location.href = 'login.html';
+        };
+
+        function val(item, keys, fallback='') {
+            for (const k of keys) {
+                if (item && item[k] !== undefined && item[k] !== null && item[k] !== '') return item[k];
+            }
+            return fallback;
+        }
+
+        function fechaObj(v) {
+            if (!v) return null;
+            if (v.seconds) return new Date(v.seconds * 1000);
+            if (typeof v === 'string') {
+                const d = new Date(v);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            if (v instanceof Date) return v;
+            return null;
+        }
+
+        function fechaTexto(v) {
+            const d = fechaObj(v);
+            if (!d) return 'Sin fecha';
+            return d.toLocaleDateString('es-MX') + ' ' + d.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+        }
+
+        function soloFechaTexto(v) {
+            const d = fechaObj(v);
+            if (!d) return 'Sin fecha';
+            return d.toLocaleDateString('es-MX');
+        }
+
+        function escapeHTML(text) {
+            return String(text ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+        }
+
+        function getData() {
+            const tipo = document.getElementById('tipoReporte').value;
+            if (tipo === 'requisiciones') return tareas;
+            if (tipo === 'inventario') return inventario;
+            return expedientes;
+        }
+
+        function textoBusqueda(item, tipo) {
+            if (tipo === 'requisiciones') {
+                const articulos = (item.articulos || []).map(a => `${a.concepto || ''} ${a.justificacion || ''}`).join(' ');
+                return `${item.folio || ''} ${item.desc || ''} ${item.area || ''} ${item.departamento || ''} ${item.cotizacion || ''} ${item.tipoCompra || ''} ${articulos}`.toLowerCase();
+            }
+            if (tipo === 'inventario') {
+                return `${item.codigo || ''} ${item.nombre || item.producto || ''} ${item.descripcion || ''} ${item.categoria || ''} ${item.ubicacion || ''} ${item.estado || ''}`.toLowerCase();
+            }
+            return `${item.folio || ''} ${item.asunto || ''} ${item.area || ''} ${item.responsable || ''} ${item.estatus || ''} ${item.prioridad || ''} ${item.observaciones || ''}`.toLowerCase();
+        }
+
+        function fechaPrincipal(item, tipo) {
+            if (tipo === 'requisiciones') return fechaObj(val(item, ['timestamp','fechaElaboracion','fecha','creadoEn']));
+            if (tipo === 'inventario') return fechaObj(val(item, ['fechaRegistro','registradoEn','timestamp','ultimaModificacion']));
+            return fechaObj(val(item, ['fechaInicio','fechaActualizacion','timestamp','creadoEn']));
+        }
+
+        function filtrarData() {
+            const tipo = document.getElementById('tipoReporte').value;
+            const busqueda = document.getElementById('busqueda').value.trim().toLowerCase();
+            const estado = document.getElementById('filtroEstado').value;
+            const desde = document.getElementById('fechaDesde').value ? new Date(document.getElementById('fechaDesde').value + 'T00:00:00') : null;
+            const hasta = document.getElementById('fechaHasta').value ? new Date(document.getElementById('fechaHasta').value + 'T23:59:59') : null;
+
+            return getData().filter(item => {
+                if (busqueda && !textoBusqueda(item, tipo).includes(busqueda)) return false;
+                if (estado !== 'Todos') {
+                    const estadoItem = tipo === 'inventario' ? obtenerEstadoInventario(item) : String(val(item, tipo === 'requisiciones' ? ['status'] : ['estatus'], '') || '');
+                    if (estadoItem !== estado) return false;
+                }
+                const f = fechaPrincipal(item, tipo);
+                if (desde && f && f < desde) return false;
+                if (hasta && f && f > hasta) return false;
+                return true;
+            });
+        }
+
+        function obtenerEstadoInventario(item) {
+            const cantidad = Number(val(item, ['cantidadActual','cantidad','existencia'], 0));
+            const minima = Number(val(item, ['cantidadMinima','minimo'], 0));
+            if (cantidad <= 0) return 'Agotado';
+            if (minima > 0 && cantidad <= minima) return 'Bajo stock';
+            return 'Disponible';
+        }
+
+        function actualizarFiltroEstados() {
+            const tipo = document.getElementById('tipoReporte').value;
+            const filtro = document.getElementById('filtroEstado');
+            const prev = filtro.value;
+            let opciones = ['Todos'];
+            if (tipo === 'requisiciones') opciones = ['Todos','Pendiente','Completado'];
+            if (tipo === 'inventario') opciones = ['Todos','Disponible','Bajo stock','Agotado'];
+            if (tipo === 'expedientes') opciones = ['Todos','Recibido','En revisión','En proceso','Pendiente de autorización','Autorizado','Rechazado','Finalizado','Archivado'];
+            filtro.innerHTML = opciones.map(o => `<option>${o}</option>`).join('');
+            if (opciones.includes(prev)) filtro.value = prev;
+        }
+
+        function badge(text) {
+            const t = String(text || 'Sin estado');
+            const low = t.toLowerCase();
+            let cls = 'badge';
+            if (low.includes('complet') || low.includes('disponible') || low.includes('finalizado') || low.includes('autorizado')) cls += ' badge-ok';
+            else if (low.includes('pendiente') || low.includes('revisión') || low.includes('proceso') || low.includes('bajo')) cls += ' badge-warn';
+            else if (low.includes('agotado') || low.includes('rechazado')) cls += ' badge-bad';
+            return `<span class="${cls}">${escapeHTML(t)}</span>`;
+        }
+
+        function renderHeaders(tipo) {
+            const head = document.getElementById('tableHead');
+            if (tipo === 'requisiciones') {
+                head.innerHTML = `<tr><th>Folio / Concepto</th><th>Área / Departamento</th><th>Estado</th><th>Cotización</th><th>Tipo compra</th><th>Fecha</th></tr>`;
+            } else if (tipo === 'inventario') {
+                head.innerHTML = `<tr><th>Código</th><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Estado</th><th>Ubicación</th></tr>`;
+            } else {
+                head.innerHTML = `<tr><th>Folio</th><th>Asunto</th><th>Área / Responsable</th><th>Estatus</th><th>Prioridad</th><th>Fecha</th></tr>`;
+            }
+        }
+
+        function renderRows(tipo, data) {
+            const body = document.getElementById('tableBody');
+            body.innerHTML = '';
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                if (tipo === 'requisiciones') {
+                    tr.innerHTML = `
+                        <td><strong>${escapeHTML(val(item, ['folio'], 'Sin folio'))}</strong><br><small>${escapeHTML(val(item, ['desc'], 'Sin descripción'))}</small></td>
+                        <td>${escapeHTML(val(item, ['area'], 'Sin área'))}<br><small>${escapeHTML(val(item, ['departamento'], 'Sin departamento'))}</small></td>
+                        <td>${badge(val(item, ['status'], 'Sin estado'))}</td>
+                        <td>${escapeHTML(val(item, ['cotizacion'], 'Sin cotización'))}</td>
+                        <td>${escapeHTML(val(item, ['tipoCompra'], 'Sin tipo'))}</td>
+                        <td>${escapeHTML(fechaTexto(val(item, ['timestamp','fechaElaboracion','fecha','creadoEn'])))}</td>`;
+                } else if (tipo === 'inventario') {
+                    const cantidad = Number(val(item, ['cantidadActual','cantidad','existencia'], 0));
+                    const unidad = val(item, ['unidadMedida','unidad','um'], '');
+                    tr.innerHTML = `
+                        <td><strong>${escapeHTML(val(item, ['codigo'], 'Sin código'))}</strong></td>
+                        <td>${escapeHTML(val(item, ['nombre','producto'], 'Sin nombre'))}<br><small>${escapeHTML(val(item, ['descripcion'], ''))}</small></td>
+                        <td>${escapeHTML(val(item, ['categoria'], 'Sin categoría'))}</td>
+                        <td><strong>${escapeHTML(cantidad)}</strong> ${escapeHTML(unidad)}</td>
+                        <td>${badge(obtenerEstadoInventario(item))}</td>
+                        <td>${escapeHTML(val(item, ['ubicacion'], 'Sin ubicación'))}</td>`;
+                } else {
+                    tr.innerHTML = `
+                        <td><strong>${escapeHTML(val(item, ['folio'], 'Sin folio'))}</strong></td>
+                        <td>${escapeHTML(val(item, ['asunto'], 'Sin asunto'))}</td>
+                        <td>${escapeHTML(val(item, ['area'], 'Sin área'))}<br><small>${escapeHTML(val(item, ['responsable'], 'Sin responsable'))}</small></td>
+                        <td>${badge(val(item, ['estatus'], 'Sin estatus'))}</td>
+                        <td>${escapeHTML(val(item, ['prioridad'], 'Sin prioridad'))}</td>
+                        <td>${escapeHTML(soloFechaTexto(val(item, ['fechaInicio','fechaActualizacion','timestamp','creadoEn'])))}</td>`;
+                }
+                body.appendChild(tr);
+            });
+        }
+
+        function renderMetricas(tipo, data) {
+            const cards = document.getElementById('metricsReportes');
+            let html = `<div class="metric-card"><h4>Total filtrado</h4><p>${data.length}</p></div>`;
+            if (tipo === 'requisiciones') {
+                const pendientes = data.filter(d => d.status === 'Pendiente').length;
+                const completadas = data.filter(d => d.status === 'Completado').length;
+                const sinCotizar = data.filter(d => !d.cotizacion || d.cotizacion === 'Sin cotizar').length;
+                html += `<div class="metric-card" style="border-left-color:#f59e0b;"><h4>Pendientes</h4><p style="color:#f59e0b;">${pendientes}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#10b981;"><h4>Completadas</h4><p style="color:#10b981;">${completadas}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#ef4444;"><h4>Sin cotizar</h4><p style="color:#ef4444;">${sinCotizar}</p></div>`;
+            } else if (tipo === 'inventario') {
+                const bajo = data.filter(d => obtenerEstadoInventario(d) === 'Bajo stock').length;
+                const agotado = data.filter(d => obtenerEstadoInventario(d) === 'Agotado').length;
+                const totalExistencia = data.reduce((s,d) => s + Number(val(d, ['cantidadActual','cantidad','existencia'], 0)), 0);
+                html += `<div class="metric-card" style="border-left-color:#10b981;"><h4>Unidades totales</h4><p style="color:#10b981;">${totalExistencia}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#f59e0b;"><h4>Bajo stock</h4><p style="color:#f59e0b;">${bajo}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#ef4444;"><h4>Agotados</h4><p style="color:#ef4444;">${agotado}</p></div>`;
+            } else {
+                const proceso = data.filter(d => ['Recibido','En revisión','En proceso','Pendiente de autorización'].includes(d.estatus)).length;
+                const finalizados = data.filter(d => ['Finalizado','Archivado','Autorizado'].includes(d.estatus)).length;
+                const alta = data.filter(d => d.prioridad === 'Alta').length;
+                html += `<div class="metric-card" style="border-left-color:#f59e0b;"><h4>En seguimiento</h4><p style="color:#f59e0b;">${proceso}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#10b981;"><h4>Cerrados / autorizados</h4><p style="color:#10b981;">${finalizados}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#ef4444;"><h4>Prioridad alta</h4><p style="color:#ef4444;">${alta}</p></div>`;
+            }
+            cards.innerHTML = html;
+        }
+
+        window.render = function() {
+            actualizarFiltroEstados();
+            const tipo = document.getElementById('tipoReporte').value;
+            const data = filtrarData();
+            const titulos = { requisiciones:'Reporte de requisiciones', inventario:'Reporte de inventario de almacén', expedientes:'Reporte de expedientes / seguimiento' };
+            document.getElementById('tituloReporte').innerText = titulos[tipo];
+            renderMetricas(tipo, data);
+            renderHeaders(tipo);
+            renderRows(tipo, data);
+            document.getElementById('emptyState').style.display = data.length ? 'none' : 'block';
+        };
+
+        window.limpiarFiltros = () => {
+            document.getElementById('busqueda').value = '';
+            document.getElementById('filtroEstado').value = 'Todos';
+            document.getElementById('fechaDesde').value = '';
+            document.getElementById('fechaHasta').value = '';
+            render();
+        };
+
+        window.imprimirReporte = () => {
+            window.print();
+        };
+
+        window.exportarCSV = () => {
+            const tipo = document.getElementById('tipoReporte').value;
+            const data = filtrarData();
+            let rows = [];
+            if (tipo === 'requisiciones') {
+                rows = [['Folio','Concepto','Area','Departamento','Estado','Cotizacion','Tipo compra','Fecha'], ...data.map(d => [val(d,['folio']), val(d,['desc']), val(d,['area']), val(d,['departamento']), val(d,['status']), val(d,['cotizacion']), val(d,['tipoCompra']), fechaTexto(val(d,['timestamp','fechaElaboracion','fecha','creadoEn']))])];
+            } else if (tipo === 'inventario') {
+                rows = [['Codigo','Producto','Descripcion','Categoria','Cantidad','Unidad','Estado','Ubicacion'], ...data.map(d => [val(d,['codigo']), val(d,['nombre','producto']), val(d,['descripcion']), val(d,['categoria']), val(d,['cantidadActual','cantidad','existencia'],0), val(d,['unidadMedida','unidad','um']), obtenerEstadoInventario(d), val(d,['ubicacion'])])];
+            } else {
+                rows = [['Folio','Asunto','Area','Responsable','Estatus','Prioridad','Fecha inicio','Observaciones'], ...data.map(d => [val(d,['folio']), val(d,['asunto']), val(d,['area']), val(d,['responsable']), val(d,['estatus']), val(d,['prioridad']), soloFechaTexto(val(d,['fechaInicio','fechaActualizacion','timestamp','creadoEn'])), val(d,['observaciones'])])];
+            }
+            const csv = rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `reporte_${tipo}_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            ['tipoReporte','busqueda','filtroEstado','fechaDesde','fechaHasta'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener(id === 'busqueda' ? 'input' : 'change', render);
+            });
+        });
+    </script>
+</head>
+<body>
+    <aside>
+        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
+        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
+        <nav>
+            <a href="index.html">Dashboard Principal</a>
+            <a href="pendientes.html">Pendientes Generales</a>
+            <a href="inventario.html">Inventario de Almacén</a>
+            <a href="expedientes.html">Expedientes / Seguimiento</a>
+            <a href="reportes.html">Reportes</a>
+        </nav>
+        <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
+            <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
+    </aside>
+
+    <main>
+        <div class="top-actions">
+            <div>
+                <h1>Reportes</h1>
+                <p style="color:#64748b; font-size:0.9rem; margin-top:4px;">Consulta, filtra, imprime y exporta información general del sistema.</p>
+            </div>
+            <div>
+                <button class="btn-nueva" onclick="imprimirReporte()">🖨️ Imprimir</button>
+                <button class="btn-nueva" onclick="exportarCSV()" style="margin-left:8px; background:#10b981;">⬇️ Exportar CSV</button>
+            </div>
+        </div>
+
+        <div class="filters-card">
+            <div class="filters-grid">
+                <div class="form-group">
+                    <label>Tipo de reporte</label>
+                    <select id="tipoReporte" class="form-control">
+                        <option value="requisiciones">Requisiciones</option>
+                        <option value="inventario">Inventario</option>
+                        <option value="expedientes">Expedientes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Buscar</label>
+                    <input id="busqueda" class="form-control" type="text" placeholder="Folio, asunto, producto, área...">
+                </div>
+                <div class="form-group">
+                    <label>Estado</label>
+                    <select id="filtroEstado" class="form-control"><option>Todos</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Desde</label>
+                    <input id="fechaDesde" class="form-control" type="date">
+                </div>
+                <div class="form-group">
+                    <label>Hasta</label>
+                    <input id="fechaHasta" class="form-control" type="date">
+                </div>
+                <button class="tab-btn" type="button" onclick="limpiarFiltros()">Limpiar</button>
+            </div>
+        </div>
+
+        <h2 id="tituloReporte" class="report-title">Reporte de requisiciones</h2>
+        <div id="metricsReportes" class="metrics-grid" style="margin-top:15px;"></div>
+
+        <table>
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        <div id="emptyState" class="empty-state">No hay información con los filtros seleccionados.</div>
+    </main>
+</body>
+</html>
