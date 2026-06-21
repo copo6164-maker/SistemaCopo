@@ -115,8 +115,18 @@
         import { 
             getAuth, 
             signInWithEmailAndPassword,
-            onAuthStateChanged
+            onAuthStateChanged,
+            signOut
         } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { 
+            getFirestore,
+            collection,
+            query,
+            where,
+            getDocs,
+            doc,
+            getDoc
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
@@ -130,10 +140,43 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        onAuthStateChanged(auth, (user) => {
+        async function obtenerPerfil(user) {
+            const email = (user.email || '').toLowerCase();
+            let snap = await getDoc(doc(db, "usuario", email));
+
+            // Respaldo por si el ID del documento no coincide exactamente con el correo.
+            if (!snap.exists()) {
+                const q = query(collection(db, "usuario"), where("correo", "==", email));
+                const res = await getDocs(q);
+                if (res.empty) return null;
+                snap = res.docs[0];
+            }
+
+            const data = snap.data();
+            return {
+                id: snap.id,
+                correo: email,
+                nombre: data.nombre || email,
+                rol: (data.rol || '').toLowerCase(),
+                activo: data.activo !== false
+            };
+        }
+
+        function rutaPorRol(rol) {
+            if (rol === 'administrador') return 'index.html';
+            if (rol === 'compras') return 'pendientes.html';
+            if (rol === 'almacen') return 'inventario.html';
+            return 'index.html';
+        }
+
+        onAuthStateChanged(auth, async (user) => {
             if (user) {
-                window.location.href = "index.html";
+                const perfil = await obtenerPerfil(user);
+                if (perfil && perfil.activo) {
+                    window.location.href = rutaPorRol(perfil.rol);
+                }
             }
         });
 
@@ -147,10 +190,24 @@
             const password = document.getElementById("password").value;
 
             try {
-                await signInWithEmailAndPassword(auth, email, password);
-                window.location.href = "index.html";
+                const cred = await signInWithEmailAndPassword(auth, email, password);
+                const perfil = await obtenerPerfil(cred.user);
+
+                if (!perfil) {
+                    await signOut(auth);
+                    errorMsg.textContent = "El usuario no tiene rol asignado en el sistema.";
+                    return;
+                }
+
+                if (!perfil.activo) {
+                    await signOut(auth);
+                    errorMsg.textContent = "El usuario está desactivado.";
+                    return;
+                }
+
+                window.location.href = rutaPorRol(perfil.rol);
             } catch (error) {
-                errorMsg.textContent = "Correo o contraseña incorrectos.";
+                errorMsg.textContent = "Correo o contraseña incorrectos o sin permisos.";
                 console.error(error);
             }
         });

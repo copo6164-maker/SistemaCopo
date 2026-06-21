@@ -101,7 +101,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, getDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
@@ -121,14 +121,76 @@
         let editId = null;
         let usuarioActual = "Usuario";
 
-        onAuthStateChanged(auth, (user) => {
+        async function obtenerPerfil(user) {
+            const email = (user.email || '').toLowerCase();
+            let snap = await getDoc(doc(db, "usuario", email));
+
+            // Respaldo por si el ID del documento no coincide exactamente con el correo.
+            if (!snap.exists()) {
+                const q = query(collection(db, "usuario"), where("correo", "==", email));
+                const res = await getDocs(q);
+                if (res.empty) return null;
+                snap = res.docs[0];
+            }
+
+            const data = snap.data();
+            return {
+                id: snap.id,
+                correo: email,
+                nombre: data.nombre || email,
+                rol: (data.rol || '').toLowerCase(),
+                activo: data.activo !== false
+            };
+        }
+
+        function rutaPorRol(rol) {
+            if (rol === 'administrador') return 'index.html';
+            if (rol === 'compras') return 'pendientes.html';
+            if (rol === 'almacen') return 'inventario.html';
+            return 'login.html';
+        }
+
+        function configurarMenu(rol) {
+            const nav = document.getElementById('mainNav');
+            if (!nav) return;
+            if (rol === 'administrador') {
+                nav.innerHTML = `
+                    <a href="index.html">Dashboard Principal</a>
+                    <a href="pendientes.html">Pendientes Generales</a>
+                    <a href="inventario.html">Inventario de Almacén</a>
+                `;
+            } else if (rol === 'compras') {
+                nav.innerHTML = `<a href="pendientes.html">Pendientes Generales</a>`;
+            } else if (rol === 'almacen') {
+                nav.innerHTML = `<a href="inventario.html">Inventario de Almacén</a>`;
+            } else {
+                nav.innerHTML = '';
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
             if (!user) {
                 window.location.href = "login.html";
-            } else {
-                usuarioActual = user.email || "Usuario";
-                const userEmail = document.getElementById('userEmail');
-                if (userEmail) userEmail.innerText = usuarioActual;
+                return;
             }
+
+            const perfil = await obtenerPerfil(user);
+            if (!perfil || !perfil.activo) {
+                await signOut(auth);
+                window.location.href = "login.html";
+                return;
+            }
+
+            const rolesPermitidos = ['administrador', 'almacen'];
+            if (!rolesPermitidos.includes(perfil.rol)) {
+                window.location.href = rutaPorRol(perfil.rol);
+                return;
+            }
+
+            usuarioActual = perfil.correo || user.email || "Usuario";
+            const userEmail = document.getElementById('userEmail');
+            if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
+            configurarMenu(perfil.rol);
         });
 
         window.cerrarSesion = async () => {
@@ -391,7 +453,7 @@
     <aside>
         <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
         <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
-        <nav>
+        <nav id="mainNav">
             <a href="index.html">Dashboard Principal</a>
             <a href="pendientes.html">Pendientes Generales</a>
             <a href="inventario.html">Inventario de Almacén</a>
