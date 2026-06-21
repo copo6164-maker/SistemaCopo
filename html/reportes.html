@@ -44,6 +44,7 @@
         let tareas = [];
         let inventario = [];
         let expedientes = [];
+        let proveedores = [];
         let perfilActual = null;
         let unsubscribeFns = [];
 
@@ -81,7 +82,8 @@
             unsubscribeFns = [
                 onSnapshot(collection(db, 'tareas'), snap => { tareas = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); }),
                 onSnapshot(collection(db, 'inventario'), snap => { inventario = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); }),
-                onSnapshot(collection(db, 'expedientes'), snap => { expedientes = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); })
+                onSnapshot(collection(db, 'expedientes'), snap => { expedientes = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); }),
+                onSnapshot(collection(db, 'proveedores'), snap => { proveedores = snap.docs.map(d => ({ id:d.id, ...d.data() })); render(); })
             ];
         }
 
@@ -129,6 +131,7 @@
             const tipo = document.getElementById('tipoReporte').value;
             if (tipo === 'requisiciones') return tareas;
             if (tipo === 'inventario') return inventario;
+            if (tipo === 'proveedores') return proveedores;
             return expedientes;
         }
 
@@ -140,12 +143,16 @@
             if (tipo === 'inventario') {
                 return `${item.codigo || ''} ${item.nombre || item.producto || ''} ${item.descripcion || ''} ${item.categoria || ''} ${item.ubicacion || ''} ${item.estado || ''}`.toLowerCase();
             }
+            if (tipo === 'proveedores') {
+                return `${item.nombre || ''} ${item.rfc || ''} ${item.tipoServicio || ''} ${item.contacto || ''} ${item.telefono || ''} ${item.correo || ''} ${item.direccion || ''} ${item.observaciones || ''}`.toLowerCase();
+            }
             return `${item.folio || ''} ${item.asunto || ''} ${item.area || ''} ${item.responsable || ''} ${item.estatus || ''} ${item.prioridad || ''} ${item.observaciones || ''}`.toLowerCase();
         }
 
         function fechaPrincipal(item, tipo) {
             if (tipo === 'requisiciones') return fechaObj(val(item, ['timestamp','fechaElaboracion','fecha','creadoEn']));
             if (tipo === 'inventario') return fechaObj(val(item, ['fechaRegistro','registradoEn','timestamp','ultimaModificacion']));
+            if (tipo === 'proveedores') return fechaObj(val(item, ['fechaRegistro','ultimaModificacion','timestamp']));
             return fechaObj(val(item, ['fechaInicio','fechaActualizacion','timestamp','creadoEn']));
         }
 
@@ -159,7 +166,7 @@
             return getData().filter(item => {
                 if (busqueda && !textoBusqueda(item, tipo).includes(busqueda)) return false;
                 if (estado !== 'Todos') {
-                    const estadoItem = tipo === 'inventario' ? obtenerEstadoInventario(item) : String(val(item, tipo === 'requisiciones' ? ['status'] : ['estatus'], '') || '');
+                    const estadoItem = tipo === 'inventario' ? obtenerEstadoInventario(item) : String(val(item, tipo === 'requisiciones' ? ['status'] : (tipo === 'proveedores' ? ['estatus'] : ['estatus']), '') || '');
                     if (estadoItem !== estado) return false;
                 }
                 const f = fechaPrincipal(item, tipo);
@@ -184,6 +191,7 @@
             let opciones = ['Todos'];
             if (tipo === 'requisiciones') opciones = ['Todos','Pendiente','Completado'];
             if (tipo === 'inventario') opciones = ['Todos','Disponible','Bajo stock','Agotado'];
+            if (tipo === 'proveedores') opciones = ['Todos','Activo','Inactivo'];
             if (tipo === 'expedientes') opciones = ['Todos','Recibido','En revisión','En proceso','Pendiente de autorización','Autorizado','Rechazado','Finalizado','Archivado'];
             filtro.innerHTML = opciones.map(o => `<option>${o}</option>`).join('');
             if (opciones.includes(prev)) filtro.value = prev;
@@ -195,7 +203,7 @@
             let cls = 'badge';
             if (low.includes('complet') || low.includes('disponible') || low.includes('finalizado') || low.includes('autorizado')) cls += ' badge-ok';
             else if (low.includes('pendiente') || low.includes('revisión') || low.includes('proceso') || low.includes('bajo')) cls += ' badge-warn';
-            else if (low.includes('agotado') || low.includes('rechazado')) cls += ' badge-bad';
+            else if (low.includes('agotado') || low.includes('rechazado') || low.includes('inactivo')) cls += ' badge-bad';
             return `<span class="${cls}">${escapeHTML(t)}</span>`;
         }
 
@@ -203,6 +211,8 @@
             const head = document.getElementById('tableHead');
             if (tipo === 'requisiciones') {
                 head.innerHTML = `<tr><th>Folio / Concepto</th><th>Área / Departamento</th><th>Estado</th><th>Cotización</th><th>Tipo compra</th><th>Fecha</th></tr>`;
+            } else if (tipo === 'proveedores') {
+                head.innerHTML = `<tr><th>Proveedor</th><th>RFC</th><th>Tipo</th><th>Contacto</th><th>Estatus</th><th>Fecha</th></tr>`;
             } else if (tipo === 'inventario') {
                 head.innerHTML = `<tr><th>Código</th><th>Producto</th><th>Categoría</th><th>Existencia</th><th>Estado</th><th>Ubicación</th></tr>`;
             } else {
@@ -233,6 +243,14 @@
                         <td><strong>${escapeHTML(cantidad)}</strong> ${escapeHTML(unidad)}</td>
                         <td>${badge(obtenerEstadoInventario(item))}</td>
                         <td>${escapeHTML(val(item, ['ubicacion'], 'Sin ubicación'))}</td>`;
+                } else if (tipo === 'proveedores') {
+                    tr.innerHTML = `
+                        <td><strong>${escapeHTML(val(item, ['nombre'], 'Sin nombre'))}</strong><br><small>${escapeHTML(val(item, ['direccion'], ''))}</small></td>
+                        <td>${escapeHTML(val(item, ['rfc'], 'No registrado'))}</td>
+                        <td>${escapeHTML(val(item, ['tipoServicio'], 'General'))}</td>
+                        <td>${escapeHTML(val(item, ['contacto'], 'Sin contacto'))}<br><small>${escapeHTML(val(item, ['telefono'], ''))} ${escapeHTML(val(item, ['correo'], ''))}</small></td>
+                        <td>${badge(val(item, ['estatus'], 'Activo'))}</td>
+                        <td>${escapeHTML(soloFechaTexto(val(item, ['fechaRegistro','ultimaModificacion','timestamp'])))}</td>`;
                 } else {
                     tr.innerHTML = `
                         <td><strong>${escapeHTML(val(item, ['folio'], 'Sin folio'))}</strong></td>
@@ -263,6 +281,13 @@
                 html += `<div class="metric-card" style="border-left-color:#10b981;"><h4>Unidades totales</h4><p style="color:#10b981;">${totalExistencia}</p></div>`;
                 html += `<div class="metric-card" style="border-left-color:#f59e0b;"><h4>Bajo stock</h4><p style="color:#f59e0b;">${bajo}</p></div>`;
                 html += `<div class="metric-card" style="border-left-color:#ef4444;"><h4>Agotados</h4><p style="color:#ef4444;">${agotado}</p></div>`;
+            } else if (tipo === 'proveedores') {
+                const activos = data.filter(d => (d.estatus || 'Activo') === 'Activo').length;
+                const inactivos = data.filter(d => (d.estatus || 'Activo') === 'Inactivo').length;
+                const tipos = new Set(data.map(d => d.tipoServicio || 'General')).size;
+                html += `<div class="metric-card" style="border-left-color:#10b981;"><h4>Activos</h4><p style="color:#10b981;">${activos}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#ef4444;"><h4>Inactivos</h4><p style="color:#ef4444;">${inactivos}</p></div>`;
+                html += `<div class="metric-card" style="border-left-color:#f59e0b;"><h4>Tipos</h4><p style="color:#f59e0b;">${tipos}</p></div>`;
             } else {
                 const proceso = data.filter(d => ['Recibido','En revisión','En proceso','Pendiente de autorización'].includes(d.estatus)).length;
                 const finalizados = data.filter(d => ['Finalizado','Archivado','Autorizado'].includes(d.estatus)).length;
@@ -278,7 +303,7 @@
             actualizarFiltroEstados();
             const tipo = document.getElementById('tipoReporte').value;
             const data = filtrarData();
-            const titulos = { requisiciones:'Reporte de requisiciones', inventario:'Reporte de inventario de almacén', expedientes:'Reporte de expedientes / seguimiento' };
+            const titulos = { requisiciones:'Reporte de requisiciones', inventario:'Reporte de inventario de almacén', proveedores:'Reporte de proveedores', expedientes:'Reporte de expedientes / seguimiento' };
             document.getElementById('tituloReporte').innerText = titulos[tipo];
             renderMetricas(tipo, data);
             renderHeaders(tipo);
@@ -306,6 +331,8 @@
                 rows = [['Folio','Concepto','Area','Departamento','Estado','Cotizacion','Tipo compra','Fecha'], ...data.map(d => [val(d,['folio']), val(d,['desc']), val(d,['area']), val(d,['departamento']), val(d,['status']), val(d,['cotizacion']), val(d,['tipoCompra']), fechaTexto(val(d,['timestamp','fechaElaboracion','fecha','creadoEn']))])];
             } else if (tipo === 'inventario') {
                 rows = [['Codigo','Producto','Descripcion','Categoria','Cantidad','Unidad','Estado','Ubicacion'], ...data.map(d => [val(d,['codigo']), val(d,['nombre','producto']), val(d,['descripcion']), val(d,['categoria']), val(d,['cantidadActual','cantidad','existencia'],0), val(d,['unidadMedida','unidad','um']), obtenerEstadoInventario(d), val(d,['ubicacion'])])];
+            } else if (tipo === 'proveedores') {
+                rows = [['Proveedor','RFC','Tipo','Contacto','Telefono','Correo','Estatus','Fecha registro'], ...data.map(d => [val(d,['nombre']), val(d,['rfc']), val(d,['tipoServicio']), val(d,['contacto']), val(d,['telefono']), val(d,['correo']), val(d,['estatus']), soloFechaTexto(val(d,['fechaRegistro','ultimaModificacion','timestamp']))])];
             } else {
                 rows = [['Folio','Asunto','Area','Responsable','Estatus','Prioridad','Fecha inicio','Observaciones'], ...data.map(d => [val(d,['folio']), val(d,['asunto']), val(d,['area']), val(d,['responsable']), val(d,['estatus']), val(d,['prioridad']), soloFechaTexto(val(d,['fechaInicio','fechaActualizacion','timestamp','creadoEn'])), val(d,['observaciones'])])];
             }
@@ -336,6 +363,7 @@
         <nav>
             <a href="index.html">Dashboard Principal</a>
             <a href="pendientes.html">Pendientes Generales</a>
+            <a href="proveedores.html">Proveedores</a>
             <a href="inventario.html">Inventario de Almacén</a>
             <a href="expedientes.html">Expedientes / Seguimiento</a>
             <a href="reportes.html">Reportes</a>
@@ -365,6 +393,7 @@
                     <select id="tipoReporte" class="form-control">
                         <option value="requisiciones">Requisiciones</option>
                         <option value="inventario">Inventario</option>
+                        <option value="proveedores">Proveedores</option>
                         <option value="expedientes">Expedientes</option>
                     </select>
                 </div>

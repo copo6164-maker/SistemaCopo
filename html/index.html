@@ -118,6 +118,7 @@
         <nav id="mainNav">
             <a href="index.html">Dashboard Principal</a>
             <a href="pendientes.html">Pendientes Generales</a>
+            <a href="proveedores.html">Proveedores</a>
             <a href="inventario.html">Inventario de Almacén</a>
             <a href="expedientes.html">Expedientes / Seguimiento</a>
             <a href="reportes.html">Reportes</a>
@@ -245,12 +246,13 @@
                 nav.innerHTML = `
                     <a href="index.html">Dashboard Principal</a>
                     <a href="pendientes.html">Pendientes Generales</a>
+                    <a href="proveedores.html">Proveedores</a>
                     <a href="inventario.html">Inventario de Almacén</a>
                     <a href="expedientes.html">Expedientes / Seguimiento</a>
                     <a href="reportes.html">Reportes</a>
                 `;
             } else if (rol === 'compras') {
-                nav.innerHTML = `<a href="pendientes.html">Pendientes Generales</a>`;
+                nav.innerHTML = `<a href="pendientes.html">Pendientes Generales</a><a href="proveedores.html">Proveedores</a>`;
             } else if (rol === 'almacen') {
                 nav.innerHTML = `<a href="inventario.html">Inventario de Almacén</a>`;
             } else if (rol === 'seguimiento') {

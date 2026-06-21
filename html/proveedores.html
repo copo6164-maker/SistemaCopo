@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SistemaCopo - Proveedores</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .top-actions { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-bottom:15px; }
+        .filters-card { background:#fff; border-radius:12px; padding:18px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin:20px 0; }
+        .filters-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap:12px; align-items:end; }
+        .form-group { margin-bottom:15px; }
+        .form-group label { display:block; font-weight:600; margin-bottom:6px; color:#334155; font-size:0.9rem; }
+        .form-control { width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:0.95rem; background:white; }
+        .btn-table { cursor:pointer; padding:7px 11px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:0.83rem; margin:2px; transition:0.2s; }
+        .btn-table:hover { background:#f8fafc; border-color:#94a3b8; }
+        .badge { display:inline-block; padding:5px 10px; border-radius:999px; font-size:0.78rem; font-weight:700; }
+        .badge-ok { background:#dcfce7; color:#166534; }
+        .badge-bad { background:#fee2e2; color:#991b1b; }
+        .badge-warn { background:#fef3c7; color:#92400e; }
+        .empty-state { display:none; text-align:center; color:#64748b; background:#fff; border-radius:12px; padding:25px; margin-top:18px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); }
+        .grid-form { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+        .history-item { border-left:4px solid #002147; background:#f8fafc; padding:10px 12px; border-radius:8px; margin-bottom:10px; }
+        .small-muted { color:#64748b; font-size:0.85rem; }
+        @media (max-width: 800px) { .grid-form { grid-template-columns:1fr; } .top-actions { flex-direction:column; align-items:stretch; } }
+        @media print { aside, .top-actions, .filters-card, .btn-table, .modal { display:none !important; } body { display:block; overflow:auto; background:#fff; } main { padding:20px; max-width:none; } table { box-shadow:none; } }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
+            authDomain: "sistemacopo-171ca.firebaseapp.com",
+            projectId: "sistemacopo-171ca",
+            storageBucket: "sistemacopo-171ca.firebasestorage.app",
+            messagingSenderId: "193935838790",
+            appId: "1:193935838790:web:40075e51d34af011fa8447",
+            measurementId: "G-Y4S9PTPRG3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let proveedoresData = [];
+        let editId = null;
+        let usuarioActual = "Usuario";
+        let perfilActual = null;
+
+        function rutaPorRol(rol) {
+            rol = String(rol || '').trim().toLowerCase();
+            if (rol === 'administrador') return 'index.html';
+            if (rol === 'compras') return 'pendientes.html';
+            if (rol === 'almacen') return 'inventario.html';
+            if (rol === 'seguimiento') return 'expedientes.html';
+            return 'login.html';
+        }
+
+        async function obtenerPerfil(user) {
+            const email = (user.email || '').trim().toLowerCase();
+            const snap = await getDoc(doc(db, 'usuario', email));
+            if (!snap.exists()) return null;
+            const data = snap.data();
+            return { correo: email, nombre: data.nombre || email, rol: String(data.rol || '').trim().toLowerCase(), activo: data.activo !== false };
+        }
+
+        function configurarMenu(rol) {
+            const nav = document.getElementById('mainNav');
+            if (!nav) return;
+            if (rol === 'administrador') {
+                nav.innerHTML = `
+                    <a href="index.html">Dashboard Principal</a>
+                    <a href="pendientes.html">Pendientes Generales</a>
+                    <a href="proveedores.html">Proveedores</a>
+                    <a href="inventario.html">Inventario de Almacén</a>
+                    <a href="expedientes.html">Expedientes / Seguimiento</a>
+                    <a href="reportes.html">Reportes</a>
+                `;
+            } else if (rol === 'compras') {
+                nav.innerHTML = `
+                    <a href="pendientes.html">Pendientes Generales</a>
+                    <a href="proveedores.html">Proveedores</a>
+                `;
+            } else if (rol === 'almacen') {
+                nav.innerHTML = `<a href="inventario.html">Inventario de Almacén</a>`;
+            } else if (rol === 'seguimiento') {
+                nav.innerHTML = `<a href="expedientes.html">Expedientes / Seguimiento</a>`;
+            } else {
+                nav.innerHTML = '';
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) { window.location.href = 'login.html'; return; }
+            const perfil = await obtenerPerfil(user);
+            if (!perfil || !perfil.activo) { await signOut(auth); window.location.href = 'login.html'; return; }
+            perfilActual = perfil;
+            usuarioActual = perfil.correo;
+            sessionStorage.setItem('perfilSistemaCopo', JSON.stringify(perfil));
+            if (!['administrador', 'compras'].includes(perfil.rol)) { window.location.href = rutaPorRol(perfil.rol); return; }
+            configurarMenu(perfil.rol);
+            const userEmail = document.getElementById('userEmail');
+            if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
+            iniciarLectura();
+        });
+
+        window.cerrarSesion = async () => {
+            sessionStorage.removeItem('perfilSistemaCopo');
+            await signOut(auth);
+            window.location.href = 'login.html';
+        };
+
+        function iniciarLectura() {
+            const proveedoresQuery = query(collection(db, 'proveedores'), orderBy('fechaRegistro', 'desc'));
+            onSnapshot(proveedoresQuery, (snapshot) => {
+                proveedoresData = snapshot.docs.map(d => ({ id:d.id, ...d.data() }));
+                renderProveedores();
+            }, (error) => {
+                console.error('Error al leer proveedores:', error);
+                alert('No se pudo cargar proveedores. Revisa las reglas de Firestore para la colección proveedores.');
+            });
+        }
+
+        function escapeHTML(text) {
+            return String(text ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+        }
+
+        function fechaTexto(valor) {
+            if (!valor) return 'Sin fecha';
+            if (valor.seconds) return new Date(valor.seconds * 1000).toLocaleString('es-MX');
+            const d = new Date(valor);
+            return isNaN(d.getTime()) ? 'Sin fecha' : d.toLocaleString('es-MX');
+        }
+
+        function crearMovimiento(accion, detalle) {
+            return { accion, detalle, usuario: usuarioActual, fecha: new Date() };
+        }
+
+        function estatusBadge(estatus) {
+            const e = String(estatus || 'Activo');
+            const cls = e === 'Activo' ? 'badge-ok' : 'badge-bad';
+            return `<span class="badge ${cls}">${escapeHTML(e)}</span>`;
+        }
+
+        function tipoBadge(tipo) {
+            return `<span class="badge badge-warn">${escapeHTML(tipo || 'General')}</span>`;
+        }
+
+        function aplicarFiltros() {
+            const q = document.getElementById('buscarProveedor').value.trim().toLowerCase();
+            const tipo = document.getElementById('filtroTipo').value;
+            const estatus = document.getElementById('filtroEstatus').value;
+
+            return proveedoresData.filter(p => {
+                const texto = `${p.nombre || ''} ${p.rfc || ''} ${p.telefono || ''} ${p.correo || ''} ${p.direccion || ''} ${p.tipoServicio || ''} ${p.contacto || ''} ${p.observaciones || ''}`.toLowerCase();
+                if (q && !texto.includes(q)) return false;
+                if (tipo && p.tipoServicio !== tipo) return false;
+                if (estatus && p.estatus !== estatus) return false;
+                return true;
+            });
+        }
+
+        function actualizarResumen(lista) {
+            const total = lista.length;
+            const activos = lista.filter(p => (p.estatus || 'Activo') === 'Activo').length;
+            const inactivos = lista.filter(p => (p.estatus || 'Activo') === 'Inactivo').length;
+            const tipos = new Set(lista.map(p => p.tipoServicio || 'General')).size;
+            document.getElementById('txtTotal').innerText = total;
+            document.getElementById('txtActivos').innerText = activos;
+            document.getElementById('txtInactivos').innerText = inactivos;
+            document.getElementById('txtTipos').innerText = tipos;
+        }
+
+        function renderProveedores() {
+            const tbody = document.getElementById('tableBody');
+            const empty = document.getElementById('emptyState');
+            tbody.innerHTML = '';
+            const lista = aplicarFiltros();
+            actualizarResumen(lista);
+            empty.style.display = lista.length ? 'none' : 'block';
+
+            lista.forEach(p => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <strong>${escapeHTML(p.nombre || 'Sin nombre')}</strong><br>
+                        <span class="small-muted">RFC: ${escapeHTML(p.rfc || 'No registrado')}</span>
+                    </td>
+                    <td>${tipoBadge(p.tipoServicio)}</td>
+                    <td>
+                        ${escapeHTML(p.contacto || 'Sin contacto')}<br>
+                        <span class="small-muted">${escapeHTML(p.telefono || '')}</span><br>
+                        <span class="small-muted">${escapeHTML(p.correo || '')}</span>
+                    </td>
+                    <td>${escapeHTML(p.direccion || 'Sin dirección')}</td>
+                    <td>${estatusBadge(p.estatus)}</td>
+                    <td>${fechaTexto(p.fechaRegistro)}</td>
+                    <td>
+                        <button class="btn-table" onclick="imprimirProveedor('${p.id}')">🖨️ Ficha</button>
+                        <button class="btn-table" onclick="verHistorial('${p.id}')">🕓 Historial</button>
+                        <button class="btn-table" onclick="editarProveedor('${p.id}')">✏️ Editar</button>
+                        <button class="btn-table" style="color:#ef4444; border-color:#ef4444;" onclick="eliminarProveedor('${p.id}')">🗑️ Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        window.limpiarFiltros = () => {
+            document.getElementById('buscarProveedor').value = '';
+            document.getElementById('filtroTipo').value = '';
+            document.getElementById('filtroEstatus').value = '';
+            renderProveedores();
+        };
+
+        window.abrirNuevoProveedor = () => {
+            editId = null;
+            document.getElementById('modalTitle').innerText = 'Nuevo Proveedor';
+            document.getElementById('submitBtn').innerText = 'Guardar Proveedor';
+            document.getElementById('proveedorForm').reset();
+            document.getElementById('estatus').value = 'Activo';
+            document.getElementById('proveedorModal').style.display = 'block';
+        };
+
+        window.editarProveedor = (id) => {
+            const p = proveedoresData.find(x => x.id === id);
+            if (!p) return;
+            editId = id;
+            document.getElementById('modalTitle').innerText = 'Editar Proveedor';
+            document.getElementById('submitBtn').innerText = 'Actualizar Proveedor';
+            document.getElementById('nombre').value = p.nombre || '';
+            document.getElementById('rfc').value = p.rfc || '';
+            document.getElementById('telefono').value = p.telefono || '';
+            document.getElementById('correo').value = p.correo || '';
+            document.getElementById('direccion').value = p.direccion || '';
+            document.getElementById('tipoServicio').value = p.tipoServicio || 'General';
+            document.getElementById('contacto').value = p.contacto || '';
+            document.getElementById('estatus').value = p.estatus || 'Activo';
+            document.getElementById('observaciones').value = p.observaciones || '';
+            document.getElementById('proveedorModal').style.display = 'block';
+        };
+
+        window.eliminarProveedor = async (id) => {
+            const p = proveedoresData.find(x => x.id === id);
+            if (!p) return;
+            if (!confirm(`¿Eliminar el proveedor "${p.nombre || 'Sin nombre'}"?`)) return;
+            await deleteDoc(doc(db, 'proveedores', id));
+        };
+
+        window.verHistorial = (id) => {
+            const p = proveedoresData.find(x => x.id === id);
+            if (!p) return;
+            const cont = document.getElementById('historialContent');
+            const historial = p.historial || [];
+            if (!historial.length) {
+                cont.innerHTML = '<p class="small-muted">Sin movimientos registrados.</p>';
+            } else {
+                cont.innerHTML = historial.slice().reverse().map(h => `
+                    <div class="history-item">
+                        <strong>${escapeHTML(h.accion || 'Movimiento')}</strong><br>
+                        <span>${escapeHTML(h.detalle || '')}</span><br>
+                        <span class="small-muted">${escapeHTML(h.usuario || 'Usuario')} · ${fechaTexto(h.fecha)}</span>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('historialModal').style.display = 'block';
+        };
+
+        window.imprimirProveedor = (id) => {
+            const p = proveedoresData.find(x => x.id === id);
+            if (!p) return;
+            const ventana = window.open('', '_blank');
+            ventana.document.write(`
+                <!DOCTYPE html><html><head><title>Ficha proveedor</title>
+                <style>
+                    body{font-family:Arial,sans-serif;margin:30px;color:#111827}.box{max-width:850px;margin:auto;border:1px solid #111;padding:24px}.title{text-align:center;text-transform:uppercase;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{border:1px solid #111;padding:9px;min-height:36px}.lbl{font-weight:bold;background:#f2f2f2}.obs{border:1px solid #111;padding:12px;margin-top:12px;min-height:80px}.firmas{display:grid;grid-template-columns:1fr 1fr;margin-top:70px;gap:60px;text-align:center}.line{border-top:1px solid #111;padding-top:8px}.small{font-size:12px;color:#444}@media print{button{display:none}}
+                </style></head><body>
+                <div class="box">
+                    <h2 class="title">Ficha de Proveedor</h2>
+                    <div class="grid">
+                        <div class="field lbl">Nombre del proveedor</div><div class="field">${escapeHTML(p.nombre || '')}</div>
+                        <div class="field lbl">RFC</div><div class="field">${escapeHTML(p.rfc || '')}</div>
+                        <div class="field lbl">Tipo de servicio / producto</div><div class="field">${escapeHTML(p.tipoServicio || '')}</div>
+                        <div class="field lbl">Estatus</div><div class="field">${escapeHTML(p.estatus || '')}</div>
+                        <div class="field lbl">Contacto principal</div><div class="field">${escapeHTML(p.contacto || '')}</div>
+                        <div class="field lbl">Teléfono</div><div class="field">${escapeHTML(p.telefono || '')}</div>
+                        <div class="field lbl">Correo</div><div class="field">${escapeHTML(p.correo || '')}</div>
+                        <div class="field lbl">Fecha de registro</div><div class="field">${fechaTexto(p.fechaRegistro)}</div>
+                        <div class="field lbl">Dirección</div><div class="field">${escapeHTML(p.direccion || '')}</div>
+                        <div class="field lbl">Registrado por</div><div class="field">${escapeHTML(p.registradoPor || '')}</div>
+                    </div>
+                    <div class="obs"><strong>Observaciones:</strong><br>${escapeHTML(p.observaciones || 'Sin observaciones.')}</div>
+                    <div class="firmas"><div class="line">Elaboró</div><div class="line">Vo. Bo.</div></div>
+                    <p class="small">Generado desde SistemaCopo.</p>
+                </div>
+                <script>window.onload=function(){window.print();};<\/script>
+                </body></html>
+            `);
+            ventana.document.close();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            ['buscarProveedor','filtroTipo','filtroEstatus'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', renderProveedores);
+                if (el) el.addEventListener('change', renderProveedores);
+            });
+
+            const form = document.getElementById('proveedorForm');
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const datos = {
+                    nombre: document.getElementById('nombre').value.trim(),
+                    rfc: document.getElementById('rfc').value.trim().toUpperCase(),
+                    telefono: document.getElementById('telefono').value.trim(),
+                    correo: document.getElementById('correo').value.trim(),
+                    direccion: document.getElementById('direccion').value.trim(),
+                    tipoServicio: document.getElementById('tipoServicio').value,
+                    contacto: document.getElementById('contacto').value.trim(),
+                    estatus: document.getElementById('estatus').value,
+                    observaciones: document.getElementById('observaciones').value.trim(),
+                    ultimaModificacion: new Date(),
+                    modificadoPor: usuarioActual
+                };
+
+                try {
+                    if (editId) {
+                        const actual = proveedoresData.find(p => p.id === editId) || {};
+                        const historial = actual.historial || [];
+                        await updateDoc(doc(db, 'proveedores', editId), {
+                            ...datos,
+                            historial: [...historial, crearMovimiento('Proveedor editado', `Se actualizó la información de ${datos.nombre}.`)]
+                        });
+                        alert('Proveedor actualizado correctamente.');
+                    } else {
+                        await addDoc(collection(db, 'proveedores'), {
+                            ...datos,
+                            fechaRegistro: new Date(),
+                            registradoPor: usuarioActual,
+                            historial: [crearMovimiento('Proveedor creado', `Se registró el proveedor ${datos.nombre}.`)]
+                        });
+                        alert('Proveedor registrado correctamente.');
+                    }
+                    editId = null;
+                    form.reset();
+                    document.getElementById('proveedorModal').style.display = 'none';
+                } catch (error) {
+                    console.error('Error al guardar proveedor:', error);
+                    alert('No se pudo guardar el proveedor. Revisa la conexión y las reglas de Firebase.');
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <aside>
+        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
+        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
+        <nav id="mainNav">
+            <a href="index.html">Dashboard Principal</a>
+            <a href="pendientes.html">Pendientes Generales</a>
+            <a href="proveedores.html">Proveedores</a>
+            <a href="inventario.html">Inventario de Almacén</a>
+            <a href="expedientes.html">Expedientes / Seguimiento</a>
+            <a href="reportes.html">Reportes</a>
+        </nav>
+        <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
+            <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
+    </aside>
+
+    <main>
+        <div class="top-actions">
+            <div>
+                <h1>Proveedores</h1>
+                <p style="color:#64748b; font-size:0.9rem; margin-top:4px;">Directorio para compras, cotizaciones y servicios.</p>
+            </div>
+            <button class="btn-nueva" onclick="abrirNuevoProveedor()">+ Nuevo Proveedor</button>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card"><h4>Total proveedores</h4><p id="txtTotal">0</p></div>
+            <div class="metric-card" style="border-left-color:#10b981;"><h4>Activos</h4><p id="txtActivos" style="color:#10b981;">0</p></div>
+            <div class="metric-card" style="border-left-color:#ef4444;"><h4>Inactivos</h4><p id="txtInactivos" style="color:#ef4444;">0</p></div>
+            <div class="metric-card" style="border-left-color:#f59e0b;"><h4>Tipos registrados</h4><p id="txtTipos" style="color:#f59e0b;">0</p></div>
+        </div>
+
+        <div class="filters-card">
+            <div class="filters-grid">
+                <div class="form-group"><label>Buscar:</label><input id="buscarProveedor" class="form-control" type="text" placeholder="Nombre, RFC, servicio, contacto, correo..."></div>
+                <div class="form-group"><label>Tipo de servicio:</label><select id="filtroTipo" class="form-control"><option value="">Todos</option><option>Refacciones</option><option>Servicios</option><option>Material de oficina</option><option>Equipo</option><option>Herramientas</option><option>Consumibles</option><option>Transporte</option><option>General</option></select></div>
+                <div class="form-group"><label>Estatus:</label><select id="filtroEstatus" class="form-control"><option value="">Todos</option><option>Activo</option><option>Inactivo</option></select></div>
+                <div class="form-group"><button class="tab-btn" onclick="limpiarFiltros()" style="width:100%;">Limpiar filtros</button></div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>Tipo</th>
+                    <th>Contacto</th>
+                    <th>Dirección</th>
+                    <th>Estatus</th>
+                    <th>Fecha Registro</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        <div id="emptyState" class="empty-state">No hay proveedores con los filtros seleccionados.</div>
+    </main>
+
+    <div id="proveedorModal" class="modal">
+        <div class="modal-content" style="max-width:850px; max-height:90vh; overflow-y:auto;">
+            <span class="close-btn" onclick="document.getElementById('proveedorModal').style.display='none'">&times;</span>
+            <h2 id="modalTitle" style="font-size:1.4rem; color:#002147; margin-bottom:5px;">Nuevo Proveedor</h2>
+            <p style="color:#64748b; font-size:0.85rem; margin-bottom:15px;">Registra la información del proveedor para compras y cotizaciones.</p>
+            <hr style="margin-bottom:20px; border:0; border-top:1px solid #e2e8f0;">
+            <form id="proveedorForm">
+                <div class="grid-form">
+                    <div class="form-group"><label>Nombre del proveedor:</label><input id="nombre" class="form-control" type="text" required></div>
+                    <div class="form-group"><label>RFC:</label><input id="rfc" class="form-control" type="text" placeholder="Opcional"></div>
+                    <div class="form-group"><label>Teléfono:</label><input id="telefono" class="form-control" type="text"></div>
+                    <div class="form-group"><label>Correo:</label><input id="correo" class="form-control" type="email"></div>
+                    <div class="form-group"><label>Tipo de servicio/producto:</label><select id="tipoServicio" class="form-control" required><option>Refacciones</option><option>Servicios</option><option>Material de oficina</option><option>Equipo</option><option>Herramientas</option><option>Consumibles</option><option>Transporte</option><option selected>General</option></select></div>
+                    <div class="form-group"><label>Contacto principal:</label><input id="contacto" class="form-control" type="text" placeholder="Nombre de contacto"></div>
+                    <div class="form-group"><label>Estatus:</label><select id="estatus" class="form-control"><option>Activo</option><option>Inactivo</option></select></div>
+                    <div class="form-group"><label>Dirección:</label><input id="direccion" class="form-control" type="text"></div>
+                    <div class="form-group" style="grid-column:1 / -1;"><label>Observaciones:</label><textarea id="observaciones" class="form-control" rows="4" placeholder="Notas del proveedor, condiciones, referencias o comentarios..."></textarea></div>
+                </div>
+                <button id="submitBtn" type="submit" class="btn-nueva" style="width:100%; padding:14px; font-size:1rem;">Guardar Proveedor</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="historialModal" class="modal">
+        <div class="modal-content" style="max-width:650px; max-height:90vh; overflow-y:auto;">
+            <span class="close-btn" onclick="document.getElementById('historialModal').style.display='none'">&times;</span>
+            <h2 style="font-size:1.4rem; color:#002147; margin-bottom:15px;">Historial del Proveedor</h2>
+            <div id="historialContent"></div>
+        </div>
+    </div>
+</body>
+</html>
