@@ -1,121 +1,457 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="auth-check">
 <head>
     <meta charset="UTF-8">
     <title>SistemaCopo - Dashboard Principal</title>
     <link rel="stylesheet" href="../css/style.css">
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
+        .auth-check body {
+            visibility: hidden;
+        }
+
+        .user-box {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .user-email {
+            display: block;
+            color: #fff;
+            font-size: 0.78rem;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+
+        .user-role {
+            display: block;
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            margin-bottom: 10px;
+        }
+
+        .btn-logout {
+            width: 100%;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 9px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-logout:hover {
+            background: #dc2626;
+        }
+
         .dashboard-header {
-            display:flex;
-            justify-content:space-between;
-            align-items:flex-start;
-            gap:20px;
-            margin-bottom:20px;
+            margin-bottom: 25px;
         }
-        .dashboard-subtitle {
-            color:#64748b;
-            font-size:0.9rem;
-            margin-top:4px;
+
+        .dashboard-header h1 {
+            color: #1e293b;
+            font-size: 2rem;
+            margin-bottom: 5px;
         }
+
+        .dashboard-header p {
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+            border-left: 5px solid #1e3a8a;
+        }
+
+        .metric-card.red {
+            border-left-color: #ef4444;
+        }
+
+        .metric-card.orange {
+            border-left-color: #f97316;
+        }
+
+        .metric-card.green {
+            border-left-color: #22c55e;
+        }
+
+        .metric-card.purple {
+            border-left-color: #7c3aed;
+        }
+
+        .metric-card h4 {
+            color: #64748b;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            letter-spacing: 0.04em;
+        }
+
+        .metric-card .number {
+            color: #1e293b;
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
         .metric-card small {
-            display:block;
-            margin-top:8px;
-            color:#64748b;
-            font-weight:600;
-            font-size:0.78rem;
+            color: #64748b;
         }
-        .dashboard-grid {
-            display:grid;
-            grid-template-columns: 1.3fr 1fr;
-            gap:20px;
-            margin-top:30px;
+
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 18px;
+            margin-bottom: 25px;
         }
-        .panel-card {
-            background:white;
-            border-radius:12px;
-            padding:22px;
-            box-shadow:0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
-        }
-        .panel-card h3 {
-            font-size:1rem;
-            color:#1e293b;
-            margin-bottom:16px;
-        }
-        .quick-actions {
-            display:grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap:12px;
-            margin-top:25px;
-        }
+
         .quick-card {
-            background:white;
-            border-radius:12px;
-            padding:18px;
-            box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);
-            text-decoration:none;
-            color:#1e293b;
-            border-left:5px solid #002147;
-            transition:0.2s;
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            text-decoration: none;
+            color: #1e293b;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+            border-left: 5px solid #2563eb;
+            transition: 0.2s;
         }
+
         .quick-card:hover {
-            transform:translateY(-2px);
-            box-shadow:0 10px 15px -3px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(15,23,42,0.13);
         }
-        .quick-card strong { display:block; margin-bottom:5px; }
-        .quick-card span { color:#64748b; font-size:0.85rem; }
-        .recent-list { display:flex; flex-direction:column; gap:10px; }
-        .recent-item {
-            border:1px solid #e2e8f0;
-            border-radius:10px;
-            padding:12px;
-            background:#f8fafc;
+
+        .quick-card h3 {
+            margin-bottom: 8px;
+            font-size: 1rem;
         }
-        .recent-item strong {
-            display:block;
-            color:#0f172a;
-            font-size:0.92rem;
-            margin-bottom:4px;
+
+        .quick-card p {
+            color: #64748b;
+            font-size: 0.85rem;
         }
-        .recent-item span {
-            color:#64748b;
-            font-size:0.82rem;
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 22px;
+            margin-bottom: 25px;
         }
-        .badge {
-            display:inline-block;
-            padding:4px 9px;
-            border-radius:999px;
-            font-size:0.75rem;
-            font-weight:700;
-            background:#e2e8f0;
-            color:#334155;
-            margin-top:6px;
+
+        .chart-box {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.08);
         }
-        .badge-ok { background:#dcfce7; color:#166534; }
-        .badge-warn { background:#fef3c7; color:#92400e; }
-        .badge-bad { background:#fee2e2; color:#991b1b; }
-        .badge-blue { background:#dbeafe; color:#1d4ed8; }
-        .chart-row {
-            display:grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap:20px;
-            margin-top:28px;
+
+        .chart-box h3 {
+            color: #334155;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            text-align: center;
         }
-        .chart-box canvas {
-            max-height:260px !important;
+
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 22px;
+            margin-bottom: 30px;
         }
-        @media (max-width: 1000px) {
-            .dashboard-grid { grid-template-columns:1fr; }
-            .dashboard-header { flex-direction:column; }
+
+        .panel-box {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 8px 20px rgba(15,23,42,0.08);
+        }
+
+        .panel-box h3 {
+            color: #334155;
+            font-size: 1rem;
+            margin-bottom: 12px;
+        }
+
+        .empty-text {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .movement-item,
+        .alert-item {
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.88rem;
+        }
+
+        .movement-item:last-child,
+        .alert-item:last-child {
+            border-bottom: none;
+        }
+
+        .alert-item strong {
+            color: #ef4444;
+        }
+
+
+        /* =========================
+           ASISTENTE IA FLOTANTE
+        ========================= */
+        .ai-widget {
+            position: fixed;
+            right: 28px;
+            bottom: 28px;
+            z-index: 9999;
+            font-family: inherit;
+        }
+
+        .ai-bubble {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #0b5ed7, #1e3a8a);
+            color: #fff;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 14px 34px rgba(30, 58, 138, 0.48);
+            transition: 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .ai-bubble::after {
+            content: "";
+            position: absolute;
+            inset: -7px;
+            border-radius: 50%;
+            border: 2px solid rgba(37, 99, 235, 0.25);
+            animation: aiPulse 1.8s infinite;
+        }
+
+        .ai-bubble:hover {
+            transform: scale(1.08);
+            box-shadow: 0 18px 42px rgba(30, 58, 138, 0.6);
+        }
+
+        @keyframes aiPulse {
+            0% { transform: scale(0.95); opacity: 0.9; }
+            100% { transform: scale(1.22); opacity: 0; }
+        }
+
+        .ai-panel {
+            width: 370px;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.28);
+            overflow: hidden;
+            margin-bottom: 18px;
+            display: none;
+            border: 1px solid #dbeafe;
+            animation: aiShow 0.24s ease;
+        }
+
+        .ai-panel.active {
+            display: block;
+        }
+
+        @keyframes aiShow {
+            from { opacity: 0; transform: translateY(14px) scale(0.96); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .ai-header {
+            background: linear-gradient(135deg, #0f172a, #1e3a8a);
+            color: white;
+            padding: 14px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-header strong {
+            display: block;
+            font-size: 0.96rem;
+        }
+
+        .ai-header small {
+            display: block;
+            color: #cbd5e1;
+            font-size: 0.74rem;
+            margin-top: 2px;
+        }
+
+        .ai-header button {
+            background: rgba(255,255,255,0.12);
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .ai-body {
+            padding: 18px;
+            text-align: center;
+            max-height: 390px;
+            overflow-y: auto;
+            background: linear-gradient(180deg, #f8fafc, #ffffff);
+        }
+
+        .ai-avatar {
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            background: #dbeafe;
+            color: #1e3a8a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px auto;
+            font-size: 2rem;
+            box-shadow: inset 0 0 0 5px #eff6ff, 0 8px 20px rgba(37, 99, 235, 0.16);
+        }
+
+        .ai-body h3 {
+            color: #0f172a;
+            font-size: 1rem;
+            margin-bottom: 6px;
+        }
+
+        .ai-body p {
+            color: #64748b;
+            font-size: 0.85rem;
+            margin-bottom: 14px;
+        }
+
+        .ai-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 9px;
+            margin-bottom: 14px;
+        }
+
+        .ai-actions button {
+            border: 1px solid #dbeafe;
+            background: #ffffff;
+            color: #1e3a8a;
+            padding: 10px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 700;
+            transition: 0.2s;
+        }
+
+        .ai-actions button:hover {
+            background: #eff6ff;
+            transform: translateY(-1px);
+        }
+
+        .ai-chat {
+            text-align: left;
+        }
+
+        .ai-msg {
+            padding: 10px 12px;
+            border-radius: 13px;
+            margin-bottom: 8px;
+            font-size: 0.84rem;
+            line-height: 1.42;
+            white-space: pre-wrap;
+        }
+
+        .ai-msg.user {
+            background: #1e3a8a;
+            color: white;
+            margin-left: 42px;
+            border-bottom-right-radius: 4px;
+        }
+
+        .ai-msg.bot {
+            background: #ffffff;
+            color: #1e293b;
+            border: 1px solid #e2e8f0;
+            margin-right: 25px;
+            border-bottom-left-radius: 4px;
+        }
+
+        .ai-input {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .ai-input input {
+            flex: 1;
+            border: 1px solid #cbd5e1;
+            border-radius: 13px;
+            padding: 11px 12px;
+            outline: none;
+            font-size: 0.85rem;
+        }
+
+        .ai-input input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+
+        .ai-input button {
+            width: 44px;
+            border: none;
+            border-radius: 13px;
+            background: #2563eb;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .ai-input button:hover {
+            background: #1e40af;
+        }
+
+        @media (max-width: 700px) {
+            .ai-widget {
+                right: 16px;
+                bottom: 16px;
+            }
+
+            .ai-panel {
+                width: calc(100vw - 32px);
+            }
         }
     </style>
 </head>
+
 <body>
 
+    <!-- MENÚ LATERAL -->
     <aside>
-        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
-        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
-        <nav id="mainNav">
+        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo">
+        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: #fff;">SistemaCopo</h2>
+
+        <nav>
             <a href="index.html">Dashboard Principal</a>
             <a href="pendientes.html">Pendientes Generales</a>
             <a href="proveedores.html">Proveedores</a>
@@ -123,93 +459,169 @@
             <a href="expedientes.html">Expedientes / Seguimiento</a>
             <a href="reportes.html">Reportes</a>
         </nav>
-        <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
-            <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
-            <button onclick="cerrarSesion()" class="btn-logout">Cerrar sesión</button>
+
+        <div class="user-box">
+            <span class="user-email" id="userEmail">Usuario</span>
+            <span class="user-role" id="userRole">Rol</span>
+            <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
         </div>
     </aside>
 
+    <!-- CONTENIDO PRINCIPAL -->
     <main>
         <div class="dashboard-header">
-            <div>
-                <h1>Dashboard Principal</h1>
-                <p class="dashboard-subtitle">Vista general en tiempo real de compras, almacén, expedientes y reportes.</p>
-            </div>
+            <h1>Dashboard Principal</h1>
+            <p>Vista general en tiempo real de compras, almacén, expedientes y reportes.</p>
         </div>
 
+        <!-- MÉTRICAS PRINCIPALES -->
         <div class="metrics-grid">
             <div class="metric-card">
                 <h4>Requisiciones activas</h4>
-                <p id="txtReqActivas">0</p>
-                <small id="txtReqDetalle">0 completadas</small>
+                <div class="number" id="txtReqActivas">0</div>
+                <small id="txtReqDetalle">0 completadas / 0 total</small>
             </div>
-            <div class="metric-card" style="border-left-color:#ef4444;">
+
+            <div class="metric-card red">
                 <h4>Inventario bajo / agotado</h4>
-                <p id="txtInventarioAlerta" style="color:#ef4444;">0</p>
-                <small id="txtInventarioDetalle">0 productos registrados</small>
+                <div class="number" id="txtInvBajo">0</div>
+                <small id="txtInvDetalle">0 productos registrados</small>
             </div>
-            <div class="metric-card" style="border-left-color:#f59e0b;">
+
+            <div class="metric-card orange">
                 <h4>Expedientes abiertos</h4>
-                <p id="txtExpAbiertos" style="color:#f59e0b;">0</p>
-                <small id="txtExpDetalle">0 finalizados</small>
+                <div class="number" id="txtExpAbiertos">0</div>
+                <small id="txtExpDetalle">0 finalizados o cerrados</small>
             </div>
-            <div class="metric-card" style="border-left-color:#10b981;">
+
+            <div class="metric-card green">
                 <h4>Documentos escaneados</h4>
-                <p id="txtDocs" style="color:#10b981;">0</p>
+                <div class="number" id="txtDocs">0</div>
                 <small>Archivos ligados a expedientes</small>
             </div>
         </div>
 
-        <div class="quick-actions">
-            <a class="quick-card" href="pendientes.html">
-                <strong>Requisiciones</strong>
-                <span>Crear, consultar y generar formatos de compra.</span>
+        <!-- ACCESOS RÁPIDOS -->
+        <div class="quick-grid">
+            <a href="pendientes.html" class="quick-card">
+                <h3>Requisiciones</h3>
+                <p>Crear, consultar y generar formatos de compra.</p>
             </a>
-            <a class="quick-card" href="inventario.html" style="border-left-color:#10b981;">
-                <strong>Inventario</strong>
-                <span>Revisar existencias, entradas, salidas y alertas.</span>
+
+            <a href="proveedores.html" class="quick-card">
+                <h3>Proveedores</h3>
+                <p>Registrar, consultar y administrar proveedores.</p>
             </a>
-            <a class="quick-card" href="expedientes.html" style="border-left-color:#f59e0b;">
-                <strong>Expedientes</strong>
-                <span>Seguimiento, documentos y estatus administrativos.</span>
+
+            <a href="inventario.html" class="quick-card">
+                <h3>Inventario</h3>
+                <p>Revisar existencias, entradas, salidas y alertas.</p>
             </a>
-            <a class="quick-card" href="reportes.html" style="border-left-color:#6366f1;">
-                <strong>Reportes</strong>
-                <span>Consultar, filtrar, imprimir y exportar información.</span>
+
+            <a href="expedientes.html" class="quick-card">
+                <h3>Expedientes</h3>
+                <p>Seguimiento, documentos y estatus administrativos.</p>
             </a>
+
+            <a href="reportes.html" class="quick-card">
+                <h3>Reportes</h3>
+                <p>Consultar, filtrar, imprimir y exportar información.</p>
+            </a>
+
         </div>
 
-        <div class="chart-row">
+        <!-- GRÁFICAS -->
+        <div class="charts-grid">
             <div class="chart-box">
                 <h3>Resumen general por módulo</h3>
-                <canvas id="moduleChart"></canvas>
+                <canvas id="chartGeneral"></canvas>
             </div>
+
             <div class="chart-box">
                 <h3>Inventario por estado</h3>
-                <canvas id="inventoryChart"></canvas>
+                <canvas id="chartInventario"></canvas>
             </div>
+
             <div class="chart-box">
                 <h3>Expedientes por estatus</h3>
-                <canvas id="expStatusChart"></canvas>
+                <canvas id="chartExpedientes"></canvas>
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="panel-card">
+        <!-- MOVIMIENTOS Y ALERTAS -->
+        <div class="bottom-grid">
+            <div class="panel-box">
                 <h3>Últimos movimientos detectados</h3>
-                <div id="recentActivity" class="recent-list"></div>
+                <div id="listaMovimientos">
+                    <p class="empty-text">Sin movimientos todavía.</p>
+                </div>
             </div>
-            <div class="panel-card">
+
+            <div class="panel-box">
                 <h3>Alertas importantes</h3>
-                <div id="alertsList" class="recent-list"></div>
+                <div id="listaAlertas">
+                    <p class="empty-text">Sin alertas críticas.</p>
+                </div>
             </div>
         </div>
     </main>
 
+
+
+    <!-- ASISTENTE IA FLOTANTE -->
+    <div class="ai-widget" id="aiWidget">
+        <div class="ai-panel" id="aiPanel">
+            <div class="ai-header">
+                <div>
+                    <strong>✨ Asistente SistemaCopo</strong>
+                    <small>Ayuda rápida del sistema</small>
+                </div>
+                <button type="button" onclick="cerrarAsistente()">×</button>
+            </div>
+
+            <div class="ai-body" id="aiBody">
+                <div class="ai-avatar">🤖</div>
+                <h3>Hola, soy tu asistente de SistemaCopo 👋</h3>
+                <p>¿Cómo te puedo ayudar hoy?</p>
+
+                <div class="ai-actions">
+                    <button type="button" onclick="preguntaRapida('¿Cómo creo una requisición?')">🧾 Requisiciones</button>
+                    <button type="button" onclick="preguntaRapida('¿Cómo reviso el inventario?')">📦 Inventario</button>
+                    <button type="button" onclick="preguntaRapida('¿Cómo busco un expediente?')">📁 Expedientes</button>
+                    <button type="button" onclick="preguntaRapida('¿Cómo genero un reporte?')">📊 Reportes</button>
+                </div>
+
+                <div class="ai-chat" id="aiChat"></div>
+            </div>
+
+            <div class="ai-input">
+                <input type="text" id="aiPregunta" placeholder="Escribe tu consulta..." onkeydown="enterAsistente(event)">
+                <button type="button" onclick="enviarAsistente()">➤</button>
+            </div>
+        </div>
+
+        <button class="ai-bubble" type="button" onclick="abrirAsistente()" title="Asistente SistemaCopo">
+            🤖
+        </button>
+    </div>
+
+
+    <!-- FIREBASE Y DASHBOARD -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import {
+            getAuth,
+            onAuthStateChanged,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+        import {
+            getFirestore,
+            collection,
+            getDocs,
+            doc,
+            getDoc
+        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
@@ -222,271 +634,376 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        let tareas = [];
-        let inventario = [];
-        let expedientes = [];
-        let unsubscribeFns = [];
+        let chartGeneral = null;
+        let chartInventario = null;
+        let chartExpedientes = null;
 
-        function rutaPorRol(rol) {
-            rol = String(rol || '').trim().toLowerCase();
-            if (rol === 'administrador') return 'index.html';
-            if (rol === 'compras') return 'pendientes.html';
-            if (rol === 'almacen') return 'inventario.html';
-            if (rol === 'seguimiento') return 'expedientes.html';
-            return 'login.html';
-        }
-
-        function configurarMenu(rol) {
-            const nav = document.getElementById('mainNav');
-            if (!nav) return;
-            if (rol === 'administrador') {
-                nav.innerHTML = `
-                    <a href="index.html">Dashboard Principal</a>
-                    <a href="pendientes.html">Pendientes Generales</a>
-                    <a href="proveedores.html">Proveedores</a>
-                    <a href="inventario.html">Inventario de Almacén</a>
-                    <a href="expedientes.html">Expedientes / Seguimiento</a>
-                    <a href="reportes.html">Reportes</a>
-                `;
-            } else if (rol === 'compras') {
-                nav.innerHTML = `<a href="pendientes.html">Pendientes Generales</a><a href="proveedores.html">Proveedores</a>`;
-            } else if (rol === 'almacen') {
-                nav.innerHTML = `<a href="inventario.html">Inventario de Almacén</a>`;
-            } else if (rol === 'seguimiento') {
-                nav.innerHTML = `<a href="expedientes.html">Expedientes / Seguimiento</a>`;
-            } else {
-                nav.innerHTML = '';
-            }
-        }
-
-        async function obtenerPerfil(user) {
-            const email = (user.email || '').trim().toLowerCase();
-            const snap = await getDoc(doc(db, 'usuario', email));
-            if (!snap.exists()) return null;
-            const data = snap.data();
-            return {
-                correo: email,
-                nombre: data.nombre || email,
-                rol: String(data.rol || '').trim().toLowerCase(),
-                activo: data.activo !== false
-            };
-        }
+        document.documentElement.classList.remove("auth-check");
 
         onAuthStateChanged(auth, async (user) => {
-            if (!user) { window.location.href = 'login.html'; return; }
-            const perfil = await obtenerPerfil(user);
-            if (!perfil || !perfil.activo) { await signOut(auth); window.location.href = 'login.html'; return; }
-            sessionStorage.setItem('perfilSistemaCopo', JSON.stringify(perfil));
-            if (perfil.rol !== 'administrador') { window.location.href = rutaPorRol(perfil.rol); return; }
-            const userEmail = document.getElementById('userEmail');
-            if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
-            configurarMenu(perfil.rol);
-            iniciarDashboard();
+            if (!user) {
+                window.location.href = "login.html";
+                return;
+            }
+
+            const correo = user.email.toLowerCase();
+
+            try {
+                const userRef = doc(db, "usuario", correo);
+                const userSnap = await getDoc(userRef);
+
+                if (!userSnap.exists()) {
+                    alert("El usuario no tiene rol asignado en el sistema.");
+                    await signOut(auth);
+                    window.location.href = "login.html";
+                    return;
+                }
+
+                const perfil = userSnap.data();
+
+                if (perfil.activo === false || perfil.activo === "false") {
+                    alert("Este usuario está desactivado.");
+                    await signOut(auth);
+                    window.location.href = "login.html";
+                    return;
+                }
+
+                document.getElementById("userEmail").textContent = correo;
+                document.getElementById("userRole").textContent = perfil.nombre + " (" + perfil.rol + ")";
+
+                if (perfil.rol !== "administrador") {
+                    if (perfil.rol === "compras") {
+                        window.location.href = "pendientes.html";
+                        return;
+                    }
+
+                    if (perfil.rol === "almacen") {
+                        window.location.href = "inventario.html";
+                        return;
+                    }
+                }
+
+                cargarDashboard();
+
+            } catch (error) {
+                console.error("Error al validar usuario:", error);
+                alert("No se pudo validar el usuario.");
+                window.location.href = "login.html";
+            }
         });
 
         window.cerrarSesion = async () => {
-            unsubscribeFns.forEach(fn => fn && fn());
-            sessionStorage.removeItem('perfilSistemaCopo');
             await signOut(auth);
-            window.location.href = 'login.html';
+            window.location.href = "login.html";
         };
 
-        const moduleChart = new Chart(document.getElementById('moduleChart'), {
-            type:'bar',
-            data:{
-                labels:['Requisiciones','Productos','Expedientes','Documentos'],
-                datasets:[{ label:'Total', data:[0,0,0,0], backgroundColor:'#002147' }]
-            },
-            options:{ scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
-        });
+        async function cargarDashboard() {
+            try {
+                const tareasSnap = await getDocs(collection(db, "tareas"));
+                const inventarioSnap = await getDocs(collection(db, "inventario"));
+                const expedientesSnap = await getDocs(collection(db, "expedientes"));
 
-        const inventoryChart = new Chart(document.getElementById('inventoryChart'), {
-            type:'doughnut',
-            data:{
-                labels:['Disponible','Bajo stock','Agotado'],
-                datasets:[{ data:[0,0,0], backgroundColor:['#10b981','#f59e0b','#ef4444'] }]
+                const tareas = [];
+                const inventario = [];
+                const expedientes = [];
+
+                tareasSnap.forEach(doc => tareas.push({ id: doc.id, ...doc.data() }));
+                inventarioSnap.forEach(doc => inventario.push({ id: doc.id, ...doc.data() }));
+                expedientesSnap.forEach(doc => expedientes.push({ id: doc.id, ...doc.data() }));
+
+                const reqTotal = tareas.length;
+                const reqCompletadas = tareas.filter(t => {
+                    const estado = (t.status || t.estado || "").toLowerCase();
+                    return estado.includes("listo") || estado.includes("completado");
+                }).length;
+
+                const reqActivas = reqTotal - reqCompletadas;
+
+                const invTotal = inventario.length;
+                const invBajo = inventario.filter(p => {
+                    const cantidad = Number(p.cantidadActual || p.cantidad || 0);
+                    const minima = Number(p.cantidadMinima || p.minimo || 0);
+                    return cantidad <= minima || cantidad <= 0;
+                }).length;
+
+                const expTotal = expedientes.length;
+                const expCerrados = expedientes.filter(e => {
+                    const estado = (e.estatus || e.estado || "").toLowerCase();
+                    return estado.includes("finalizado") || estado.includes("archivado") || estado.includes("cerrado");
+                }).length;
+
+                const expAbiertos = expTotal - expCerrados;
+
+                let totalDocs = 0;
+                expedientes.forEach(e => {
+                    if (Array.isArray(e.documentos)) {
+                        totalDocs += e.documentos.length;
+                    }
+                });
+
+                document.getElementById("txtReqActivas").textContent = reqActivas;
+                document.getElementById("txtReqDetalle").textContent = `${reqCompletadas} completadas / ${reqTotal} total`;
+
+                document.getElementById("txtInvBajo").textContent = invBajo;
+                document.getElementById("txtInvDetalle").textContent = `${invTotal} productos registrados`;
+
+                document.getElementById("txtExpAbiertos").textContent = expAbiertos;
+                document.getElementById("txtExpDetalle").textContent = `${expCerrados} finalizados o cerrados`;
+
+                document.getElementById("txtDocs").textContent = totalDocs;
+
+                dibujarGraficas(tareas, inventario, expedientes, totalDocs);
+                cargarMovimientos(tareas, inventario, expedientes);
+                cargarAlertas(tareas, inventario, expedientes);
+
+            } catch (error) {
+                console.error("Error al cargar dashboard:", error);
             }
-        });
-
-        const expStatusChart = new Chart(document.getElementById('expStatusChart'), {
-            type:'pie',
-            data:{
-                labels:['Recibido','En revisión','En proceso','Pendiente autorización','Finalizado/Archivado','Otros'],
-                datasets:[{ data:[0,0,0,0,0,0], backgroundColor:['#64748b','#3b82f6','#f59e0b','#ef4444','#10b981','#8b5cf6'] }]
-            }
-        });
-
-        function iniciarDashboard() {
-            unsubscribeFns.forEach(fn => fn && fn());
-            unsubscribeFns = [
-                onSnapshot(collection(db, 'tareas'), snap => { tareas = snap.docs.map(d => ({ id:d.id, ...d.data() })); renderDashboard(); }),
-                onSnapshot(collection(db, 'inventario'), snap => { inventario = snap.docs.map(d => ({ id:d.id, ...d.data() })); renderDashboard(); }),
-                onSnapshot(collection(db, 'expedientes'), snap => { expedientes = snap.docs.map(d => ({ id:d.id, ...d.data() })); renderDashboard(); })
-            ];
         }
 
-        function fechaObj(v) {
-            if (!v) return null;
-            if (v.seconds) return new Date(v.seconds * 1000);
-            if (typeof v === 'string') {
-                const d = new Date(v);
-                return isNaN(d.getTime()) ? null : d;
-            }
-            if (v instanceof Date) return v;
-            return null;
-        }
+        function dibujarGraficas(tareas, inventario, expedientes, totalDocs) {
+            if (chartGeneral) chartGeneral.destroy();
+            if (chartInventario) chartInventario.destroy();
+            if (chartExpedientes) chartExpedientes.destroy();
 
-        function fechaTexto(v) {
-            const d = fechaObj(v);
-            if (!d) return 'Sin fecha';
-            return d.toLocaleDateString('es-MX') + ' ' + d.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
-        }
-
-        function escapeHTML(text) {
-            return String(text ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
-        }
-
-        function estatusInventario(item) {
-            const actual = Number(item.cantidadActual || 0);
-            const minimo = Number(item.cantidadMinima || 0);
-            if (actual <= 0) return 'Agotado';
-            if (actual <= minimo) return 'Bajo stock';
-            return 'Disponible';
-        }
-
-        function esExpedienteCerrado(estatus) {
-            const e = String(estatus || '').toLowerCase();
-            return e.includes('finalizado') || e.includes('archivado') || e.includes('rechazado');
-        }
-
-        function renderDashboard() {
-            const reqActivas = tareas.filter(t => String(t.status || '').toLowerCase() !== 'completado').length;
-            const reqCompletadas = tareas.filter(t => String(t.status || '').toLowerCase() === 'completado').length;
-
-            let invDisponible = 0, invBajo = 0, invAgotado = 0;
-            inventario.forEach(item => {
-                const estado = estatusInventario(item);
-                if (estado === 'Disponible') invDisponible++;
-                else if (estado === 'Bajo stock') invBajo++;
-                else invAgotado++;
+            chartGeneral = new Chart(document.getElementById("chartGeneral"), {
+                type: "bar",
+                data: {
+                    labels: ["Requisiciones", "Productos", "Expedientes", "Documentos"],
+                    datasets: [{
+                        label: "Total",
+                        data: [
+                            tareas.length,
+                            inventario.length,
+                            expedientes.length,
+                            totalDocs
+                        ],
+                        backgroundColor: ["#1e3a8a", "#16a34a", "#f97316", "#7c3aed"]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
             });
 
-            const expAbiertos = expedientes.filter(e => !esExpedienteCerrado(e.estatus)).length;
-            const expCerrados = expedientes.length - expAbiertos;
-            const docsTotal = expedientes.reduce((acc, e) => acc + (Array.isArray(e.documentos) ? e.documentos.length : 0), 0);
+            const disponibles = inventario.filter(p => {
+                const cantidad = Number(p.cantidadActual || p.cantidad || 0);
+                const minima = Number(p.cantidadMinima || p.minimo || 0);
+                return cantidad > minima;
+            }).length;
 
-            document.getElementById('txtReqActivas').innerText = reqActivas;
-            document.getElementById('txtReqDetalle').innerText = `${reqCompletadas} completadas / ${tareas.length} total`;
-            document.getElementById('txtInventarioAlerta').innerText = invBajo + invAgotado;
-            document.getElementById('txtInventarioDetalle').innerText = `${inventario.length} productos registrados`;
-            document.getElementById('txtExpAbiertos').innerText = expAbiertos;
-            document.getElementById('txtExpDetalle').innerText = `${expCerrados} finalizados o cerrados`;
-            document.getElementById('txtDocs').innerText = docsTotal;
+            const bajoStock = inventario.filter(p => {
+                const cantidad = Number(p.cantidadActual || p.cantidad || 0);
+                const minima = Number(p.cantidadMinima || p.minimo || 0);
+                return cantidad > 0 && cantidad <= minima;
+            }).length;
 
-            moduleChart.data.datasets[0].data = [tareas.length, inventario.length, expedientes.length, docsTotal];
-            moduleChart.update();
+            const agotado = inventario.filter(p => {
+                const cantidad = Number(p.cantidadActual || p.cantidad || 0);
+                return cantidad <= 0;
+            }).length;
 
-            inventoryChart.data.datasets[0].data = [invDisponible, invBajo, invAgotado];
-            inventoryChart.update();
+            chartInventario = new Chart(document.getElementById("chartInventario"), {
+                type: "doughnut",
+                data: {
+                    labels: ["Disponible", "Bajo stock", "Agotado"],
+                    datasets: [{
+                        data: [disponibles, bajoStock, agotado],
+                        backgroundColor: ["#22c55e", "#f97316", "#ef4444"]
+                    }]
+                },
+                options: {
+                    responsive: true
+                }
+            });
 
-            const expContadores = { recibido:0, revision:0, proceso:0, autorizacion:0, cerrado:0, otros:0 };
+            const estados = {};
             expedientes.forEach(e => {
-                const status = String(e.estatus || '').toLowerCase();
-                if (status.includes('recibido')) expContadores.recibido++;
-                else if (status.includes('revisión') || status.includes('revision')) expContadores.revision++;
-                else if (status.includes('proceso')) expContadores.proceso++;
-                else if (status.includes('autorización') || status.includes('autorizacion')) expContadores.autorizacion++;
-                else if (esExpedienteCerrado(status)) expContadores.cerrado++;
-                else expContadores.otros++;
+                const estado = e.estatus || e.estado || "Sin estatus";
+                estados[estado] = (estados[estado] || 0) + 1;
             });
-            expStatusChart.data.datasets[0].data = [expContadores.recibido, expContadores.revision, expContadores.proceso, expContadores.autorizacion, expContadores.cerrado, expContadores.otros];
-            expStatusChart.update();
 
-            renderActividad();
-            renderAlertas(invBajo, invAgotado, reqActivas, expAbiertos);
+            chartExpedientes = new Chart(document.getElementById("chartExpedientes"), {
+                type: "bar",
+                data: {
+                    labels: Object.keys(estados),
+                    datasets: [{
+                        label: "Expedientes",
+                        data: Object.values(estados),
+                        backgroundColor: "#f97316"
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
         }
 
-        function renderActividad() {
-            const actividades = [];
+        function cargarMovimientos(tareas, inventario, expedientes) {
+            const contenedor = document.getElementById("listaMovimientos");
+            let movimientos = [];
 
-            tareas.forEach(t => {
-                actividades.push({
-                    tipo:'Requisición',
-                    titulo:t.folio || t.desc || 'Requisición sin folio',
-                    detalle:`Estado: ${t.status || 'Sin estado'} · ${t.departamento || t.area || 'Sin área'}`,
-                    fecha:fechaObj(t.timestamp || t.fecha || t.fechaActualizacion),
-                    badge:t.status || 'Requisición'
-                });
+            tareas.slice(-3).forEach(t => {
+                movimientos.push(`Requisición: ${t.folio || t.desc || t.id}`);
             });
 
-            inventario.forEach(i => {
-                actividades.push({
-                    tipo:'Inventario',
-                    titulo:i.nombre || i.codigo || 'Producto sin nombre',
-                    detalle:`Existencia: ${Number(i.cantidadActual || 0)} ${i.unidadMedida || ''} · ${i.ubicacion || 'Sin ubicación'}`,
-                    fecha:fechaObj(i.ultimaModificacion || i.fechaRegistro),
-                    badge:estatusInventario(i)
-                });
+            inventario.slice(-3).forEach(p => {
+                movimientos.push(`Inventario: ${p.nombre || p.producto || p.codigo || p.id}`);
             });
 
-            expedientes.forEach(e => {
-                actividades.push({
-                    tipo:'Expediente',
-                    titulo:e.folio || e.asunto || 'Expediente sin folio',
-                    detalle:`${e.estatus || 'Sin estatus'} · Responsable: ${e.responsable || 'Sin responsable'}`,
-                    fecha:fechaObj(e.fechaActualizacion || e.fechaCreacion || e.fechaInicio),
-                    badge:e.prioridad || e.estatus || 'Expediente'
-                });
+            expedientes.slice(-3).forEach(e => {
+                movimientos.push(`Expediente: ${e.folio || e.asunto || e.id}`);
             });
 
-            actividades.sort((a,b) => (b.fecha ? b.fecha.getTime() : 0) - (a.fecha ? a.fecha.getTime() : 0));
-            const cont = document.getElementById('recentActivity');
-            const top = actividades.slice(0, 7);
-            if (!top.length) {
-                cont.innerHTML = '<div class="recent-item"><strong>Sin movimientos todavía</strong><span>Cuando registres información aparecerá aquí.</span></div>';
+            if (movimientos.length === 0) {
+                contenedor.innerHTML = `<p class="empty-text">Sin movimientos todavía.</p>`;
                 return;
             }
-            cont.innerHTML = top.map(a => `
-                <div class="recent-item">
-                    <strong>${escapeHTML(a.titulo)}</strong>
-                    <span>${escapeHTML(a.tipo)} · ${escapeHTML(a.detalle)} · ${escapeHTML(fechaTexto(a.fecha))}</span><br>
-                    <span class="badge ${claseBadge(a.badge)}">${escapeHTML(a.badge)}</span>
-                </div>
-            `).join('');
+
+            contenedor.innerHTML = movimientos
+                .slice(-6)
+                .map(m => `<div class="movement-item">${m}</div>`)
+                .join("");
         }
 
-        function claseBadge(valor) {
-            const v = String(valor || '').toLowerCase();
-            if (v.includes('agotado') || v.includes('rechazado') || v.includes('pendiente') || v.includes('alta')) return 'badge-bad';
-            if (v.includes('bajo') || v.includes('proceso') || v.includes('provisional') || v.includes('media')) return 'badge-warn';
-            if (v.includes('disponible') || v.includes('completado') || v.includes('final') || v.includes('finalizado') || v.includes('normal')) return 'badge-ok';
-            return 'badge-blue';
-        }
+        function cargarAlertas(tareas, inventario, expedientes) {
+            const contenedor = document.getElementById("listaAlertas");
+            let alertas = [];
 
-        function renderAlertas(invBajo, invAgotado, reqActivas, expAbiertos) {
-            const alertas = [];
-            inventario.filter(i => estatusInventario(i) !== 'Disponible').slice(0, 5).forEach(i => {
-                alertas.push({
-                    titulo: estatusInventario(i) === 'Agotado' ? 'Producto agotado' : 'Producto con bajo stock',
-                    detalle: `${i.nombre || i.codigo || 'Producto'} · Existencia: ${Number(i.cantidadActual || 0)} ${i.unidadMedida || ''}`,
-                    badge: estatusInventario(i)
-                });
+            inventario.forEach(p => {
+                const cantidad = Number(p.cantidadActual || p.cantidad || 0);
+                const minima = Number(p.cantidadMinima || p.minimo || 0);
+
+                if (cantidad <= 0) {
+                    alertas.push(`<strong>Agotado:</strong> ${p.nombre || p.producto || p.codigo || p.id}`);
+                } else if (cantidad <= minima) {
+                    alertas.push(`<strong>Bajo stock:</strong> ${p.nombre || p.producto || p.codigo || p.id}`);
+                }
             });
-            if (reqActivas > 0) alertas.push({ titulo:'Requisiciones pendientes', detalle:`Hay ${reqActivas} requisición(es) activas por revisar.`, badge:'Pendiente' });
-            if (expAbiertos > 0) alertas.push({ titulo:'Expedientes abiertos', detalle:`Hay ${expAbiertos} expediente(s) en seguimiento.`, badge:'En proceso' });
-            if (!alertas.length) alertas.push({ titulo:'Sin alertas críticas', detalle:'No hay inventario bajo, requisiciones activas ni expedientes abiertos.', badge:'Correcto' });
 
-            document.getElementById('alertsList').innerHTML = alertas.slice(0, 8).map(a => `
-                <div class="recent-item">
-                    <strong>${escapeHTML(a.titulo)}</strong>
-                    <span>${escapeHTML(a.detalle)}</span><br>
-                    <span class="badge ${claseBadge(a.badge)}">${escapeHTML(a.badge)}</span>
-                </div>
-            `).join('');
+            expedientes.forEach(e => {
+                const estado = (e.estatus || e.estado || "").toLowerCase();
+                if (estado.includes("pendiente")) {
+                    alertas.push(`<strong>Expediente pendiente:</strong> ${e.folio || e.asunto || e.id}`);
+                }
+            });
+
+            tareas.forEach(t => {
+                const estado = (t.status || t.estado || "").toLowerCase();
+                if (estado.includes("pendiente") || estado.includes("sin cotizar")) {
+                    alertas.push(`<strong>Requisición pendiente:</strong> ${t.folio || t.desc || t.id}`);
+                }
+            });
+
+            if (alertas.length === 0) {
+                contenedor.innerHTML = `<p class="empty-text">Sin alertas críticas.</p>`;
+                return;
+            }
+
+            contenedor.innerHTML = alertas
+                .slice(0, 8)
+                .map(a => `<div class="alert-item">${a}</div>`)
+                .join("");
+        }
+
+
+        // =========================
+        // ASISTENTE IA FLOTANTE
+        // =========================
+
+        window.abrirAsistente = () => {
+            document.getElementById("aiPanel").classList.add("active");
+        };
+
+        window.cerrarAsistente = () => {
+            document.getElementById("aiPanel").classList.remove("active");
+        };
+
+        window.preguntaRapida = (texto) => {
+            document.getElementById("aiPregunta").value = texto;
+            enviarAsistente();
+        };
+
+        window.enterAsistente = (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                enviarAsistente();
+            }
+        };
+
+        window.enviarAsistente = () => {
+            const input = document.getElementById("aiPregunta");
+            const pregunta = input.value.trim();
+
+            if (!pregunta) return;
+
+            agregarMensajeIA(pregunta, "user");
+            input.value = "";
+
+            setTimeout(() => {
+                const respuesta = responderAsistenteDemo(pregunta);
+                agregarMensajeIA(respuesta, "bot");
+            }, 400);
+        };
+
+        function agregarMensajeIA(texto, tipo) {
+            const chat = document.getElementById("aiChat");
+            const div = document.createElement("div");
+
+            div.className = "ai-msg " + tipo;
+            div.textContent = texto;
+
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function responderAsistenteDemo(pregunta) {
+            const p = pregunta.toLowerCase();
+
+            if (p.includes("requisición") || p.includes("requisicion")) {
+                return "Para crear una requisición entra a Pendientes Generales, presiona el botón para registrar una nueva solicitud, llena los datos y guarda. Después podrás imprimir o generar el formato.";
+            }
+
+            if (p.includes("proveedor")) {
+                return "Para registrar o buscar proveedores entra al módulo Proveedores. Ahí puedes guardar nombre, RFC, teléfono, correo, tipo de servicio y observaciones.";
+            }
+
+            if (p.includes("inventario") || p.includes("producto")) {
+                return "Para revisar el inventario entra a Inventario de Almacén. Puedes registrar productos, modificar existencias y revisar bajo stock.";
+            }
+
+            if (p.includes("expediente") || p.includes("documento")) {
+                return "Para trabajar con expedientes entra a Expedientes / Seguimiento. Puedes crear expedientes, cambiar estatus y subir documentos escaneados.";
+            }
+
+            if (p.includes("reporte")) {
+                return "Para generar reportes entra al módulo Reportes. Ahí puedes filtrar información, imprimirla o exportarla.";
+            }
+
+            if (p.includes("justificación") || p.includes("justificacion")) {
+                return "Ejemplo: Se solicita este material debido a la necesidad operativa del área, con el objetivo de mantener la continuidad de las actividades programadas.";
+            }
+
+            if (p.includes("observación") || p.includes("observacion")) {
+                return "Ejemplo: Se registra seguimiento del expediente. Queda pendiente la revisión del área correspondiente y la actualización del estatus.";
+            }
+
+            return "Por ahora estoy en modo demostración. Puedo ayudarte con requisiciones, proveedores, inventario, expedientes, reportes, observaciones y justificaciones. Después me conectaremos a IA real.";
         }
     </script>
+
 </body>
 </html>
