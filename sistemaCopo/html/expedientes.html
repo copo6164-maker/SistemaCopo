@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SistemaCopo - Expedientes / Seguimiento</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .top-actions { display:flex; justify-content:space-between; align-items:center; gap:15px; margin-bottom:15px; }
+        .filters-card { background:#fff; border-radius:12px; padding:18px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin:20px 0; }
+        .filters-grid { display:grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap:12px; align-items:end; }
+        .form-group { margin-bottom:15px; }
+        .form-group label { display:block; font-weight:600; margin-bottom:6px; color:#334155; font-size:0.9rem; }
+        .form-control { width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-family:inherit; font-size:0.95rem; background:white; }
+        .badge { display:inline-block; padding:5px 10px; border-radius:999px; font-size:0.78rem; font-weight:700; }
+        .badge-recibido { background:#dbeafe; color:#1d4ed8; }
+        .badge-revision { background:#fef3c7; color:#b45309; }
+        .badge-proceso { background:#ede9fe; color:#6d28d9; }
+        .badge-autorizacion { background:#ffedd5; color:#c2410c; }
+        .badge-autorizado { background:#dcfce7; color:#15803d; }
+        .badge-rechazado { background:#fee2e2; color:#b91c1c; }
+        .badge-finalizado { background:#e0f2fe; color:#0369a1; }
+        .badge-archivado { background:#e2e8f0; color:#475569; }
+        .priority-alta { color:#ef4444; font-weight:800; }
+        .priority-media { color:#f59e0b; font-weight:800; }
+        .priority-baja { color:#10b981; font-weight:800; }
+        .btn-table { cursor:pointer; padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; background:white; font-weight:600; font-size:0.82rem; margin:2px; transition:.2s; }
+        .btn-table:hover { background:#f8fafc; border-color:#94a3b8; }
+        .btn-danger { color:#ef4444; border-color:#ef4444; }
+        .btn-primary-outline { color:#002147; border-color:#002147; }
+        .btn-success { background:#10b981; color:white; border-color:#10b981; }
+        .history-list { display:flex; flex-direction:column; gap:12px; margin-top:15px; }
+        .history-item { border-left:4px solid #002147; background:#f8fafc; padding:12px 14px; border-radius:8px; }
+        .history-item strong { color:#002147; display:block; margin-bottom:4px; }
+        .history-item small { color:#64748b; display:block; margin-top:4px; }
+        .empty-state { background:white; border-radius:12px; padding:30px; text-align:center; color:#64748b; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-top:25px; display:none; }
+        @media (max-width: 950px) { .filters-grid { grid-template-columns:1fr; } .top-actions { flex-direction:column; align-items:stretch; } }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, arrayUnion, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
+            authDomain: "sistemacopo-171ca.firebaseapp.com",
+            projectId: "sistemacopo-171ca",
+            storageBucket: "sistemacopo-171ca.firebasestorage.app",
+            messagingSenderId: "193935838790",
+            appId: "1:193935838790:web:40075e51d34af011fa8447",
+            measurementId: "G-Y4S9PTPRG3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let expedientesData = [];
+        let editingId = null;
+        let usuarioActual = "Usuario";
+
+        function rutaPorRol(rol) {
+            rol = String(rol || '').trim().toLowerCase();
+            if (rol === 'administrador') return 'index.html';
+            if (rol === 'compras') return 'pendientes.html';
+            if (rol === 'almacen') return 'inventario.html';
+            if (rol === 'seguimiento') return 'expedientes.html';
+            return 'login.html';
+        }
+
+        async function obtenerPerfil(user) {
+            const email = (user.email || '').trim().toLowerCase();
+            let snap = await getDoc(doc(db, 'usuario', email));
+            if (!snap.exists()) return null;
+            const data = snap.data();
+            return { correo: email, nombre: data.nombre || email, rol: String(data.rol || '').trim().toLowerCase(), activo: data.activo !== false };
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) { window.location.href = 'login.html'; return; }
+            const perfil = await obtenerPerfil(user);
+            if (!perfil || !perfil.activo) { await signOut(auth); window.location.href = 'login.html'; return; }
+            const rolesPermitidos = ['administrador', 'seguimiento'];
+            if (!rolesPermitidos.includes(perfil.rol)) { window.location.href = rutaPorRol(perfil.rol); return; }
+            usuarioActual = perfil.correo || user.email || 'Usuario';
+            const userEmail = document.getElementById('userEmail');
+            if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
+        });
+
+        window.cerrarSesion = async () => {
+            sessionStorage.removeItem('perfilSistemaCopo');
+            await signOut(auth);
+            window.location.href = 'login.html';
+        };
+
+        function escapeHTML(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function normalizar(txt) {
+            return String(txt || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function fechaTexto(valor) {
+            if (!valor) return 'Sin fecha';
+            try {
+                const fecha = valor.seconds ? new Date(valor.seconds * 1000) : new Date(valor);
+                return fecha.toLocaleDateString('es-MX');
+            } catch (e) { return 'Sin fecha'; }
+        }
+
+        function fechaHoraTexto(valor) {
+            if (!valor) return 'Sin fecha';
+            try {
+                const fecha = valor.seconds ? new Date(valor.seconds * 1000) : new Date(valor);
+                return fecha.toLocaleString('es-MX', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+            } catch (e) { return String(valor); }
+        }
+
+        function crearMovimiento(accion, detalle = '') {
+            return { accion, detalle, usuario: usuarioActual, fecha: new Date().toISOString() };
+        }
+
+        function claseEstatus(estatus) {
+            const e = normalizar(estatus).replace(/\s+/g, '-');
+            if (e.includes('revision')) return 'badge-revision';
+            if (e.includes('proceso')) return 'badge-proceso';
+            if (e.includes('autorizacion')) return 'badge-autorizacion';
+            if (e.includes('autorizado')) return 'badge-autorizado';
+            if (e.includes('rechazado')) return 'badge-rechazado';
+            if (e.includes('finalizado')) return 'badge-finalizado';
+            if (e.includes('archivado')) return 'badge-archivado';
+            return 'badge-recibido';
+        }
+
+        function clasePrioridad(prioridad) {
+            const p = normalizar(prioridad);
+            if (p === 'alta') return 'priority-alta';
+            if (p === 'media') return 'priority-media';
+            return 'priority-baja';
+        }
+
+        function generarFolio() {
+            const fecha = new Date();
+            const y = fecha.getFullYear();
+            const consecutivo = String(expedientesData.length + 1).padStart(3, '0');
+            return `EXP-${y}-${consecutivo}`;
+        }
+
+        const expedientesQuery = query(collection(db, 'expedientes'), orderBy('fechaActualizacion', 'desc'));
+        onSnapshot(expedientesQuery, (snapshot) => {
+            expedientesData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderExpedientes();
+        }, (error) => {
+            console.error(error);
+            alert('No se pudieron cargar los expedientes. Revisa las reglas de Firebase para la colección expedientes.');
+        });
+
+        window.renderExpedientes = function() {
+            const tbody = document.getElementById('expedientesBody');
+            const empty = document.getElementById('emptyState');
+            const contador = document.getElementById('contadorExpedientes');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const busqueda = normalizar(document.getElementById('buscarExpediente')?.value || '');
+            const filtroEstatus = document.getElementById('filtroEstatus')?.value || 'Todos';
+            const filtroArea = document.getElementById('filtroArea')?.value || 'Todos';
+            const filtroPrioridad = document.getElementById('filtroPrioridad')?.value || 'Todos';
+
+            const filtrado = expedientesData.filter(item => {
+                const texto = normalizar(`${item.folio} ${item.asunto} ${item.area} ${item.responsable} ${item.observaciones}`);
+                const coincideBusqueda = !busqueda || texto.includes(busqueda);
+                const coincideEstatus = filtroEstatus === 'Todos' || item.estatus === filtroEstatus;
+                const coincideArea = filtroArea === 'Todos' || item.area === filtroArea;
+                const coincidePrioridad = filtroPrioridad === 'Todos' || item.prioridad === filtroPrioridad;
+                return coincideBusqueda && coincideEstatus && coincideArea && coincidePrioridad;
+            });
+
+            if (contador) contador.innerText = `${filtrado.length} expediente(s)`;
+            if (empty) empty.style.display = filtrado.length ? 'none' : 'block';
+
+            filtrado.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${escapeHTML(item.folio || '')}</strong><br><span style="color:#64748b; font-size:0.85rem;">${escapeHTML(item.area || '')}</span></td>
+                    <td>${escapeHTML(item.asunto || '')}<br><span style="color:#64748b; font-size:0.85rem;">Responsable: ${escapeHTML(item.responsable || 'No asignado')}</span></td>
+                    <td><span class="badge ${claseEstatus(item.estatus)}">${escapeHTML(item.estatus || 'Recibido')}</span></td>
+                    <td><span class="${clasePrioridad(item.prioridad)}">${escapeHTML(item.prioridad || 'Baja')}</span></td>
+                    <td>${fechaTexto(item.fechaInicio)}<br><span style="color:#64748b; font-size:0.8rem;">Act: ${fechaHoraTexto(item.fechaActualizacion)}</span></td>
+                    <td>
+                        <button class="btn-table btn-primary-outline" onclick="imprimirExpediente('${item.id}')">🖨️ Imprimir</button>
+                        <button class="btn-table" onclick="editarExpediente('${item.id}')">✏️ Editar</button>
+                        <button class="btn-table" onclick="abrirHistorial('${item.id}')">🕓 Historial</button>
+                        <button class="btn-table btn-danger" onclick="eliminarExpediente('${item.id}')">🗑️ Eliminar</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        };
+
+        window.limpiarFiltros = () => {
+            document.getElementById('buscarExpediente').value = '';
+            document.getElementById('filtroEstatus').value = 'Todos';
+            document.getElementById('filtroArea').value = 'Todos';
+            document.getElementById('filtroPrioridad').value = 'Todos';
+            renderExpedientes();
+        };
+
+        window.abrirModal = () => {
+            editingId = null;
+            document.getElementById('modalTitle').innerText = 'Nuevo Expediente';
+            document.getElementById('expForm').reset();
+            document.getElementById('folio').value = generarFolio();
+            document.getElementById('fechaInicio').value = new Date().toISOString().slice(0,10);
+            document.getElementById('myModal').style.display = 'block';
+        };
+
+        window.cerrarModal = () => {
+            document.getElementById('myModal').style.display = 'none';
+        };
+
+        window.editarExpediente = (id) => {
+            const item = expedientesData.find(x => x.id === id);
+            if (!item) return alert('No se encontró el expediente.');
+            editingId = id;
+            document.getElementById('modalTitle').innerText = 'Editar Expediente';
+            document.getElementById('folio').value = item.folio || '';
+            document.getElementById('asunto').value = item.asunto || '';
+            document.getElementById('area').value = item.area || 'Administración';
+            document.getElementById('responsable').value = item.responsable || '';
+            document.getElementById('prioridad').value = item.prioridad || 'Media';
+            document.getElementById('estatus').value = item.estatus || 'Recibido';
+            document.getElementById('fechaInicio').value = item.fechaInicio || new Date().toISOString().slice(0,10);
+            document.getElementById('observaciones').value = item.observaciones || '';
+            document.getElementById('myModal').style.display = 'block';
+        };
+
+        window.eliminarExpediente = async (id) => {
+            const item = expedientesData.find(x => x.id === id);
+            if (!confirm(`¿Eliminar el expediente ${item?.folio || ''}?`)) return;
+            await deleteDoc(doc(db, 'expedientes', id));
+        };
+
+        window.abrirHistorial = (id) => {
+            const item = expedientesData.find(x => x.id === id);
+            if (!item) return;
+            document.getElementById('historialTitulo').innerText = `Historial - ${item.folio || 'Expediente'}`;
+            const cont = document.getElementById('historialContenido');
+            const historial = Array.isArray(item.historial) ? [...item.historial] : [];
+            if (!historial.length) {
+                cont.innerHTML = '<div class="history-item"><strong>Sin historial</strong><span>No hay movimientos registrados.</span></div>';
+            } else {
+                historial.sort((a,b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+                cont.innerHTML = historial.map(h => `
+                    <div class="history-item">
+                        <strong>${escapeHTML(h.accion || 'Movimiento')}</strong>
+                        <span>${escapeHTML(h.detalle || '')}</span>
+                        <small>${escapeHTML(h.usuario || 'Usuario')} · ${escapeHTML(fechaHoraTexto(h.fecha))}</small>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('historialModal').style.display = 'block';
+        };
+
+        window.cerrarHistorial = () => {
+            document.getElementById('historialModal').style.display = 'none';
+        };
+
+        window.imprimirExpediente = (id) => {
+            const item = expedientesData.find(x => x.id === id);
+            if (!item) return;
+            const historial = Array.isArray(item.historial) ? item.historial : [];
+            const ventana = window.open('', '_blank');
+            ventana.document.write(`
+                <!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHTML(item.folio || 'Expediente')}</title>
+                <style>
+                    body{font-family:Arial,sans-serif;margin:30px;color:#111827} .box{max-width:850px;margin:auto;border:1px solid #111;padding:24px}
+                    h1{text-align:center;font-size:20px;margin:0 0 5px}.sub{text-align:center;margin-bottom:22px;color:#374151}
+                    table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #111;padding:8px;font-size:12px;vertical-align:top}.lbl{font-weight:bold;background:#f3f4f6;width:22%}
+                    .obs{border:1px solid #111;padding:10px;min-height:70px;margin-top:12px;font-size:12px}.firma{margin-top:50px;text-align:center}.linea{border-top:1px solid #111;width:250px;margin:0 auto 6px}
+                </style></head><body><div class="box">
+                    <h1>Resumen de Expediente / Seguimiento</h1><div class="sub">SistemaCopo</div>
+                    <table>
+                        <tr><td class="lbl">Folio</td><td>${escapeHTML(item.folio || '')}</td><td class="lbl">Fecha de inicio</td><td>${escapeHTML(fechaTexto(item.fechaInicio))}</td></tr>
+                        <tr><td class="lbl">Asunto</td><td colspan="3">${escapeHTML(item.asunto || '')}</td></tr>
+                        <tr><td class="lbl">Área</td><td>${escapeHTML(item.area || '')}</td><td class="lbl">Responsable</td><td>${escapeHTML(item.responsable || '')}</td></tr>
+                        <tr><td class="lbl">Estatus</td><td>${escapeHTML(item.estatus || '')}</td><td class="lbl">Prioridad</td><td>${escapeHTML(item.prioridad || '')}</td></tr>
+                        <tr><td class="lbl">Última actualización</td><td colspan="3">${escapeHTML(fechaHoraTexto(item.fechaActualizacion))}</td></tr>
+                    </table>
+                    <div class="obs"><strong>Observaciones:</strong><br>${escapeHTML(item.observaciones || 'Sin observaciones.')}</div>
+                    <h3 style="font-size:14px;margin-top:18px;">Historial de movimientos</h3>
+                    <table><thead><tr><th>Acción</th><th>Detalle</th><th>Usuario</th><th>Fecha</th></tr></thead><tbody>
+                    ${historial.map(h => `<tr><td>${escapeHTML(h.accion || '')}</td><td>${escapeHTML(h.detalle || '')}</td><td>${escapeHTML(h.usuario || '')}</td><td>${escapeHTML(fechaHoraTexto(h.fecha))}</td></tr>`).join('') || '<tr><td colspan="4">Sin historial registrado.</td></tr>'}
+                    </tbody></table>
+                    <div class="firma"><div class="linea"></div>Responsable / Seguimiento</div>
+                </div><script>window.onload=function(){window.print();};<\/script></body></html>
+            `);
+            ventana.document.close();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            ['buscarExpediente','filtroEstatus','filtroArea','filtroPrioridad'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener(id === 'buscarExpediente' ? 'input' : 'change', renderExpedientes);
+            });
+
+            document.getElementById('expForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const datos = {
+                    folio: document.getElementById('folio').value.trim() || generarFolio(),
+                    asunto: document.getElementById('asunto').value.trim(),
+                    area: document.getElementById('area').value,
+                    responsable: document.getElementById('responsable').value.trim(),
+                    prioridad: document.getElementById('prioridad').value,
+                    estatus: document.getElementById('estatus').value,
+                    fechaInicio: document.getElementById('fechaInicio').value,
+                    observaciones: document.getElementById('observaciones').value.trim(),
+                    fechaActualizacion: new Date().toISOString(),
+                    actualizadoPor: usuarioActual
+                };
+
+                if (editingId) {
+                    const anterior = expedientesData.find(x => x.id === editingId);
+                    const detalle = anterior && anterior.estatus !== datos.estatus
+                        ? `Se actualizó expediente. Estatus anterior: ${anterior.estatus || 'Sin estatus'} → Nuevo: ${datos.estatus}`
+                        : 'Se actualizó información del expediente.';
+                    await updateDoc(doc(db, 'expedientes', editingId), {
+                        ...datos,
+                        historial: arrayUnion(crearMovimiento('Edición de expediente', detalle))
+                    });
+                } else {
+                    await addDoc(collection(db, 'expedientes'), {
+                        ...datos,
+                        fechaCreacion: new Date().toISOString(),
+                        creadoPor: usuarioActual,
+                        historial: [crearMovimiento('Creación de expediente', `Se creó el expediente ${datos.folio}.`)]
+                    });
+                }
+                cerrarModal();
+            });
+        });
+    </script>
+</head>
+<body>
+    <aside>
+        <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
+        <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
+        <nav>
+            <a href="index.html">Dashboard Principal</a>
+            <a href="pendientes.html">Pendientes Generales</a>
+            <a href="inventario.html">Inventario de Almacén</a>
+            <a href="expedientes.html">Expedientes / Seguimiento</a>
+        </nav>
+        <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
+            <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+        </div>
+    </aside>
+
+    <main>
+        <div class="top-actions">
+            <div>
+                <h1>Expedientes / Seguimiento</h1>
+                <p style="color:#64748b; font-size:0.9rem; margin-top:4px;">Control de expedientes, estatus, responsables e historial de seguimiento.</p>
+            </div>
+            <button class="btn-nueva" onclick="abrirModal()">+ Nuevo Expediente</button>
+        </div>
+
+        <div class="metrics-grid" style="margin-top:10px;">
+            <div class="metric-card"><h4>Total filtrado</h4><p id="contadorExpedientes">0 expediente(s)</p></div>
+        </div>
+
+        <div class="filters-card">
+            <div class="filters-grid">
+                <div class="form-group">
+                    <label>Buscar expediente</label>
+                    <input id="buscarExpediente" class="form-control" type="text" placeholder="Folio, asunto, responsable, área u observaciones...">
+                </div>
+                <div class="form-group">
+                    <label>Estatus</label>
+                    <select id="filtroEstatus" class="form-control">
+                        <option>Todos</option><option>Recibido</option><option>En revisión</option><option>En proceso</option><option>Pendiente de autorización</option><option>Autorizado</option><option>Rechazado</option><option>Finalizado</option><option>Archivado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Área</label>
+                    <select id="filtroArea" class="form-control">
+                        <option>Todos</option><option>Administración</option><option>Compras</option><option>Almacén</option><option>Máquinas</option><option>Cubierta</option><option>Base</option><option>Coordinación</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Prioridad</label>
+                    <select id="filtroPrioridad" class="form-control">
+                        <option>Todos</option><option>Alta</option><option>Media</option><option>Baja</option>
+                    </select>
+                </div>
+                <button class="tab-btn" type="button" onclick="limpiarFiltros()">Limpiar</button>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Folio / Área</th>
+                    <th>Asunto / Responsable</th>
+                    <th>Estatus</th>
+                    <th>Prioridad</th>
+                    <th>Fechas</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="expedientesBody"></tbody>
+        </table>
+        <div id="emptyState" class="empty-state">No hay expedientes con los filtros seleccionados.</div>
+    </main>
+
+    <div id="myModal" class="modal">
+        <div class="modal-content" style="max-height:90vh; overflow-y:auto;">
+            <span class="close-btn" onclick="cerrarModal()">&times;</span>
+            <h2 id="modalTitle" style="font-size:1.4rem; color:#002147; margin-bottom:5px;">Nuevo Expediente</h2>
+            <p style="color:#64748b; font-size:0.85rem; margin-bottom:15px;">Captura la información del expediente y su estatus de seguimiento.</p>
+            <hr style="margin-bottom:20px; border:0; border-top:1px solid #e2e8f0;">
+            <form id="expForm">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                    <div class="form-group"><label>Folio:</label><input id="folio" class="form-control" type="text" placeholder="EXP-2026-001" required></div>
+                    <div class="form-group"><label>Fecha de inicio:</label><input id="fechaInicio" class="form-control" type="date" required></div>
+                    <div class="form-group" style="grid-column:1 / -1;"><label>Asunto:</label><input id="asunto" class="form-control" type="text" placeholder="Descripción breve del trámite o expediente" required></div>
+                    <div class="form-group"><label>Área:</label><select id="area" class="form-control" required><option>Administración</option><option>Compras</option><option>Almacén</option><option>Máquinas</option><option>Cubierta</option><option>Base</option><option>Coordinación</option></select></div>
+                    <div class="form-group"><label>Responsable:</label><input id="responsable" class="form-control" type="text" placeholder="Nombre del responsable" required></div>
+                    <div class="form-group"><label>Prioridad:</label><select id="prioridad" class="form-control"><option>Alta</option><option selected>Media</option><option>Baja</option></select></div>
+                    <div class="form-group"><label>Estatus:</label><select id="estatus" class="form-control"><option>Recibido</option><option>En revisión</option><option>En proceso</option><option>Pendiente de autorización</option><option>Autorizado</option><option>Rechazado</option><option>Finalizado</option><option>Archivado</option></select></div>
+                    <div class="form-group" style="grid-column:1 / -1;"><label>Observaciones / Seguimiento:</label><textarea id="observaciones" class="form-control" rows="4" placeholder="Notas, avances, pendientes o comentarios del expediente..."></textarea></div>
+                </div>
+                <button type="submit" class="btn-nueva" style="width:100%; padding:14px; font-size:1rem;">Guardar Expediente</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="historialModal" class="modal">
+        <div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;">
+            <span class="close-btn" onclick="cerrarHistorial()">&times;</span>
+            <h2 id="historialTitulo" style="font-size:1.4rem; color:#002147; margin-bottom:5px;">Historial</h2>
+            <p style="color:#64748b; font-size:0.85rem; margin-bottom:15px;">Movimientos registrados del expediente.</p>
+            <div id="historialContenido" class="history-list"></div>
+        </div>
+    </div>
+</body>
+</html>
