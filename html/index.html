@@ -208,10 +208,10 @@
             color: #ef4444;
         }
 
-
         /* =========================
            ASISTENTE IA FLOTANTE
         ========================= */
+
         .ai-widget {
             position: fixed;
             right: 28px;
@@ -225,47 +225,32 @@
             height: 68px;
             border-radius: 50%;
             border: none;
-            background: linear-gradient(135deg, #0b5ed7, #1e3a8a);
-            color: #fff;
+            background: linear-gradient(135deg, #2563eb, #1e3a8a);
+            color: white;
             font-size: 2rem;
             cursor: pointer;
-            box-shadow: 0 14px 34px rgba(30, 58, 138, 0.48);
+            box-shadow: 0 14px 35px rgba(37, 99, 235, 0.45);
             transition: 0.25s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
-        }
-
-        .ai-bubble::after {
-            content: "";
-            position: absolute;
-            inset: -7px;
-            border-radius: 50%;
-            border: 2px solid rgba(37, 99, 235, 0.25);
-            animation: aiPulse 1.8s infinite;
         }
 
         .ai-bubble:hover {
             transform: scale(1.08);
-            box-shadow: 0 18px 42px rgba(30, 58, 138, 0.6);
-        }
-
-        @keyframes aiPulse {
-            0% { transform: scale(0.95); opacity: 0.9; }
-            100% { transform: scale(1.22); opacity: 0; }
+            box-shadow: 0 18px 42px rgba(37, 99, 235, 0.6);
         }
 
         .ai-panel {
-            width: 370px;
+            width: 380px;
             background: #ffffff;
             border-radius: 20px;
-            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.28);
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.26);
             overflow: hidden;
             margin-bottom: 18px;
             display: none;
             border: 1px solid #dbeafe;
-            animation: aiShow 0.24s ease;
+            animation: aiShow 0.25s ease;
         }
 
         .ai-panel.active {
@@ -273,8 +258,15 @@
         }
 
         @keyframes aiShow {
-            from { opacity: 0; transform: translateY(14px) scale(0.96); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+            from {
+                opacity: 0;
+                transform: translateY(16px) scale(0.96);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
         .ai-header {
@@ -288,7 +280,7 @@
 
         .ai-header strong {
             display: block;
-            font-size: 0.96rem;
+            font-size: 0.95rem;
         }
 
         .ai-header small {
@@ -299,27 +291,31 @@
         }
 
         .ai-header button {
-            background: rgba(255,255,255,0.12);
+            background: transparent;
             border: none;
             color: white;
-            font-size: 1.2rem;
+            font-size: 1.35rem;
             cursor: pointer;
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
+        }
+
+        .ai-header button:hover {
+            background: rgba(255,255,255,0.16);
         }
 
         .ai-body {
             padding: 18px;
             text-align: center;
-            max-height: 390px;
+            max-height: 410px;
             overflow-y: auto;
             background: linear-gradient(180deg, #f8fafc, #ffffff);
         }
 
         .ai-avatar {
-            width: 66px;
-            height: 66px;
+            width: 68px;
+            height: 68px;
             border-radius: 50%;
             background: #dbeafe;
             color: #1e3a8a;
@@ -327,8 +323,8 @@
             align-items: center;
             justify-content: center;
             margin: 0 auto 12px auto;
-            font-size: 2rem;
-            box-shadow: inset 0 0 0 5px #eff6ff, 0 8px 20px rgba(37, 99, 235, 0.16);
+            font-size: 2.05rem;
+            box-shadow: inset 0 0 0 4px #eff6ff, 0 8px 18px rgba(37, 99, 235, 0.18);
         }
 
         .ai-body h3 {
@@ -339,7 +335,7 @@
 
         .ai-body p {
             color: #64748b;
-            font-size: 0.85rem;
+            font-size: 0.86rem;
             margin-bottom: 14px;
         }
 
@@ -359,7 +355,7 @@
             font-size: 0.8rem;
             cursor: pointer;
             font-weight: 700;
-            transition: 0.2s;
+            transition: 0.2s ease;
         }
 
         .ai-actions button:hover {
@@ -373,10 +369,10 @@
 
         .ai-msg {
             padding: 10px 12px;
-            border-radius: 13px;
+            border-radius: 12px;
             margin-bottom: 8px;
             font-size: 0.84rem;
-            line-height: 1.42;
+            line-height: 1.45;
             white-space: pre-wrap;
         }
 
@@ -391,8 +387,13 @@
             background: #ffffff;
             color: #1e293b;
             border: 1px solid #e2e8f0;
-            margin-right: 25px;
+            margin-right: 26px;
             border-bottom-left-radius: 4px;
+        }
+
+        .ai-msg.loading {
+            color: #64748b;
+            font-style: italic;
         }
 
         .ai-input {
@@ -409,7 +410,7 @@
             border-radius: 13px;
             padding: 11px 12px;
             outline: none;
-            font-size: 0.85rem;
+            font-size: 0.86rem;
         }
 
         .ai-input input:focus {
@@ -418,13 +419,15 @@
         }
 
         .ai-input button {
-            width: 44px;
+            width: 46px;
             border: none;
             border-radius: 13px;
             background: #2563eb;
             color: white;
             cursor: pointer;
             font-weight: bold;
+            font-size: 1rem;
+            transition: 0.2s ease;
         }
 
         .ai-input button:hover {
@@ -441,6 +444,7 @@
                 width: calc(100vw - 32px);
             }
         }
+
     </style>
 </head>
 
@@ -458,6 +462,7 @@
             <a href="inventario.html">Inventario de Almacén</a>
             <a href="expedientes.html">Expedientes / Seguimiento</a>
             <a href="reportes.html">Reportes</a>
+            <a href="asistente.html">Asistente IA</a>
         </nav>
 
         <div class="user-box">
@@ -528,6 +533,10 @@
                 <p>Consultar, filtrar, imprimir y exportar información.</p>
             </a>
 
+            <a href="asistente.html" class="quick-card">
+                <h3>Asistente IA</h3>
+                <p>Ayuda para usar SistemaCopo y redactar textos.</p>
+            </a>
         </div>
 
         <!-- GRÁFICAS -->
@@ -566,17 +575,15 @@
         </div>
     </main>
 
-
-
     <!-- ASISTENTE IA FLOTANTE -->
     <div class="ai-widget" id="aiWidget">
         <div class="ai-panel" id="aiPanel">
             <div class="ai-header">
                 <div>
                     <strong>✨ Asistente SistemaCopo</strong>
-                    <small>Ayuda rápida del sistema</small>
+                    <small>Ayuda inteligente del sistema</small>
                 </div>
-                <button type="button" onclick="cerrarAsistente()">×</button>
+                <button type="button" onclick="cerrarAsistente()" title="Cerrar">×</button>
             </div>
 
             <div class="ai-body" id="aiBody">
@@ -596,11 +603,11 @@
 
             <div class="ai-input">
                 <input type="text" id="aiPregunta" placeholder="Escribe tu consulta..." onkeydown="enterAsistente(event)">
-                <button type="button" onclick="enviarAsistente()">➤</button>
+                <button type="button" id="btnAiEnviar" onclick="enviarAsistente()">➤</button>
             </div>
         </div>
 
-        <button class="ai-bubble" type="button" onclick="abrirAsistente()" title="Asistente SistemaCopo">
+        <button class="ai-bubble" type="button" onclick="abrirAsistente()" title="Abrir asistente">
             🤖
         </button>
     </div>
@@ -919,13 +926,18 @@
                 .join("");
         }
 
-
         // =========================
         // ASISTENTE IA FLOTANTE
         // =========================
 
+        const AI_BACKEND_URL = "http://localhost:3000/api/chat";
+
         window.abrirAsistente = () => {
             document.getElementById("aiPanel").classList.add("active");
+            setTimeout(() => {
+                const input = document.getElementById("aiPregunta");
+                if (input) input.focus();
+            }, 150);
         };
 
         window.cerrarAsistente = () => {
@@ -933,6 +945,7 @@
         };
 
         window.preguntaRapida = (texto) => {
+            abrirAsistente();
             document.getElementById("aiPregunta").value = texto;
             enviarAsistente();
         };
@@ -944,65 +957,70 @@
             }
         };
 
-        window.enviarAsistente = () => {
+        window.enviarAsistente = async () => {
             const input = document.getElementById("aiPregunta");
+            const boton = document.getElementById("btnAiEnviar");
             const pregunta = input.value.trim();
 
             if (!pregunta) return;
 
             agregarMensajeIA(pregunta, "user");
             input.value = "";
+            boton.disabled = true;
 
-            setTimeout(() => {
-                const respuesta = responderAsistenteDemo(pregunta);
-                agregarMensajeIA(respuesta, "bot");
-            }, 400);
+            const idPensando = agregarMensajeIA("Pensando...", "bot loading");
+
+            try {
+                const response = await fetch(AI_BACKEND_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        pregunta: pregunta
+                    })
+                });
+
+                const data = await response.json();
+                eliminarMensajeIA(idPensando);
+
+                if (!response.ok || data.ok === false) {
+                    agregarMensajeIA(data.respuesta || "No pude generar una respuesta en este momento.", "bot");
+                    return;
+                }
+
+                agregarMensajeIA(data.respuesta || "No pude responder en este momento.", "bot");
+
+            } catch (error) {
+                console.error("Error al conectar con el asistente:", error);
+                eliminarMensajeIA(idPensando);
+                agregarMensajeIA("No pude conectar con el servidor IA. Revisa que el backend esté prendido con npm start.", "bot");
+            } finally {
+                boton.disabled = false;
+                input.focus();
+            }
         };
 
         function agregarMensajeIA(texto, tipo) {
             const chat = document.getElementById("aiChat");
             const div = document.createElement("div");
+            const id = "ai-msg-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
 
+            div.id = id;
             div.className = "ai-msg " + tipo;
             div.textContent = texto;
 
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
+
+            return id;
         }
 
-        function responderAsistenteDemo(pregunta) {
-            const p = pregunta.toLowerCase();
-
-            if (p.includes("requisición") || p.includes("requisicion")) {
-                return "Para crear una requisición entra a Pendientes Generales, presiona el botón para registrar una nueva solicitud, llena los datos y guarda. Después podrás imprimir o generar el formato.";
-            }
-
-            if (p.includes("proveedor")) {
-                return "Para registrar o buscar proveedores entra al módulo Proveedores. Ahí puedes guardar nombre, RFC, teléfono, correo, tipo de servicio y observaciones.";
-            }
-
-            if (p.includes("inventario") || p.includes("producto")) {
-                return "Para revisar el inventario entra a Inventario de Almacén. Puedes registrar productos, modificar existencias y revisar bajo stock.";
-            }
-
-            if (p.includes("expediente") || p.includes("documento")) {
-                return "Para trabajar con expedientes entra a Expedientes / Seguimiento. Puedes crear expedientes, cambiar estatus y subir documentos escaneados.";
-            }
-
-            if (p.includes("reporte")) {
-                return "Para generar reportes entra al módulo Reportes. Ahí puedes filtrar información, imprimirla o exportarla.";
-            }
-
-            if (p.includes("justificación") || p.includes("justificacion")) {
-                return "Ejemplo: Se solicita este material debido a la necesidad operativa del área, con el objetivo de mantener la continuidad de las actividades programadas.";
-            }
-
-            if (p.includes("observación") || p.includes("observacion")) {
-                return "Ejemplo: Se registra seguimiento del expediente. Queda pendiente la revisión del área correspondiente y la actualización del estatus.";
-            }
-
-            return "Por ahora estoy en modo demostración. Puedo ayudarte con requisiciones, proveedores, inventario, expedientes, reportes, observaciones y justificaciones. Después me conectaremos a IA real.";
+        function eliminarMensajeIA(id) {
+            const elemento = document.getElementById(id);
+            if (elemento) elemento.remove();
         }
+
     </script>
 
 </body>
