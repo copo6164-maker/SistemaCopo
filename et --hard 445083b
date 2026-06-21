@@ -1,0 +1,22 @@
+[33m6179a02[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Corregir index dashboard y menu completo
+[33mfc31886[m eliminar dobles
+[33mbb83483[m Agregar asistente IA al menu
+[33m5d43e93[m Agregar asistente IA al menu
+[33m445083b[m Agregar modulo de proveedores
+[33mebf360a[m Mejorar dashboard general
+[33mabf4be7[m Agregar modulo de reportes
+[33mebd045a[m Agregar documentos escaneados a expedientes
+[33mf40c098[m Agregar modulo expedientes
+[33md1688fd[m Agregar modulo expedientes
+[33m831adc1[m Configurar roles de usuario
+[33m5c3dd80[m Agregar roles de usuario
+[33m8e871bf[m Agregar modulo de inventario de almacen
+[33m244d011[m Agregar historial de movimientos
+[33m7510ff3[m Limpieza final del proyecto
+[33m1503a2d[m Restaurar pendientes completo con filtros
+[33m4073be9[m Restaurar busqueda y filtros en pendientes
+[33m59f740a[m Agregar login y proteger paginas
+[33m8297f46[m Agregar estados de seguimiento
+[33mb2bfe35[m Agregar buscador y filtros
+[33ma832e48[m Agregar editar y eliminar requisiciones
+[33m1622d91[m Primer commit sistemaCopo
