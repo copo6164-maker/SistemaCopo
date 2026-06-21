@@ -4,16 +4,118 @@
     <meta charset="UTF-8">
     <title>SistemaCopo - Dashboard Principal</title>
     <link rel="stylesheet" href="../css/style.css">
-    <!-- Importación de Chart.js para los gráficos dinámicos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .dashboard-header {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:20px;
+            margin-bottom:20px;
+        }
+        .dashboard-subtitle {
+            color:#64748b;
+            font-size:0.9rem;
+            margin-top:4px;
+        }
+        .metric-card small {
+            display:block;
+            margin-top:8px;
+            color:#64748b;
+            font-weight:600;
+            font-size:0.78rem;
+        }
+        .dashboard-grid {
+            display:grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap:20px;
+            margin-top:30px;
+        }
+        .panel-card {
+            background:white;
+            border-radius:12px;
+            padding:22px;
+            box-shadow:0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+        }
+        .panel-card h3 {
+            font-size:1rem;
+            color:#1e293b;
+            margin-bottom:16px;
+        }
+        .quick-actions {
+            display:grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap:12px;
+            margin-top:25px;
+        }
+        .quick-card {
+            background:white;
+            border-radius:12px;
+            padding:18px;
+            box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);
+            text-decoration:none;
+            color:#1e293b;
+            border-left:5px solid #002147;
+            transition:0.2s;
+        }
+        .quick-card:hover {
+            transform:translateY(-2px);
+            box-shadow:0 10px 15px -3px rgba(0,0,0,0.08);
+        }
+        .quick-card strong { display:block; margin-bottom:5px; }
+        .quick-card span { color:#64748b; font-size:0.85rem; }
+        .recent-list { display:flex; flex-direction:column; gap:10px; }
+        .recent-item {
+            border:1px solid #e2e8f0;
+            border-radius:10px;
+            padding:12px;
+            background:#f8fafc;
+        }
+        .recent-item strong {
+            display:block;
+            color:#0f172a;
+            font-size:0.92rem;
+            margin-bottom:4px;
+        }
+        .recent-item span {
+            color:#64748b;
+            font-size:0.82rem;
+        }
+        .badge {
+            display:inline-block;
+            padding:4px 9px;
+            border-radius:999px;
+            font-size:0.75rem;
+            font-weight:700;
+            background:#e2e8f0;
+            color:#334155;
+            margin-top:6px;
+        }
+        .badge-ok { background:#dcfce7; color:#166534; }
+        .badge-warn { background:#fef3c7; color:#92400e; }
+        .badge-bad { background:#fee2e2; color:#991b1b; }
+        .badge-blue { background:#dbeafe; color:#1d4ed8; }
+        .chart-row {
+            display:grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap:20px;
+            margin-top:28px;
+        }
+        .chart-box canvas {
+            max-height:260px !important;
+        }
+        @media (max-width: 1000px) {
+            .dashboard-grid { grid-template-columns:1fr; }
+            .dashboard-header { flex-direction:column; }
+        }
+    </style>
 </head>
 <body>
 
-    <!-- MENÚ LATERAL (SIDEBAR UNIFICADO) -->
     <aside>
         <img src="../assets/img/logoCopo.png" alt="Logo" class="logo-img">
         <h2 style="font-size: 1.2rem; margin-bottom: 20px; color: white;">SistemaCopo</h2>
-        <nav>
+        <nav id="mainNav">
             <a href="index.html">Dashboard Principal</a>
             <a href="pendientes.html">Pendientes Generales</a>
             <a href="inventario.html">Inventario de Almacén</a>
@@ -26,55 +128,88 @@
         </div>
     </aside>
 
-    <!-- ÁREA DE CONTENIDO CENTRAL -->
     <main>
-        <h1>Dashboard Principal</h1>
-        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 25px;">Monitoreo en tiempo real del B/O El Puma</p>
-        
-        <!-- Cuadrícula de Tarjetas de Indicadores Conectados a Firebase -->
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <h4>Requisiciones Activas</h4>
-                <p id="txtActivas">0</p>
-            </div>
-            <div class="metric-card" style="border-left-color: #ef4444;">
-                <h4>Sin Cotizar</h4>
-                <p id="txtSinCotizar" style="color: #ef4444;">0</p>
-            </div>
-            <div class="metric-card" style="border-left-color: #f59e0b;">
-                <h4>Cotización Incompleta</h4>
-                <p id="txtIncompleta" style="color: #f59e0b;">0</p>
-            </div>
-            <div class="metric-card" style="border-left-color: #10b981;">
-                <h4>Solicitud Compra</h4>
-                <p id="txtSolicitud" style="color: #10b981;">0</p>
+        <div class="dashboard-header">
+            <div>
+                <h1>Dashboard Principal</h1>
+                <p class="dashboard-subtitle">Vista general en tiempo real de compras, almacén, expedientes y reportes.</p>
             </div>
         </div>
 
-        <!-- Bloque Visual de Gráficos Automatizados -->
-        <div class="finance-charts">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h4>Requisiciones activas</h4>
+                <p id="txtReqActivas">0</p>
+                <small id="txtReqDetalle">0 completadas</small>
+            </div>
+            <div class="metric-card" style="border-left-color:#ef4444;">
+                <h4>Inventario bajo / agotado</h4>
+                <p id="txtInventarioAlerta" style="color:#ef4444;">0</p>
+                <small id="txtInventarioDetalle">0 productos registrados</small>
+            </div>
+            <div class="metric-card" style="border-left-color:#f59e0b;">
+                <h4>Expedientes abiertos</h4>
+                <p id="txtExpAbiertos" style="color:#f59e0b;">0</p>
+                <small id="txtExpDetalle">0 finalizados</small>
+            </div>
+            <div class="metric-card" style="border-left-color:#10b981;">
+                <h4>Documentos escaneados</h4>
+                <p id="txtDocs" style="color:#10b981;">0</p>
+                <small>Archivos ligados a expedientes</small>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <a class="quick-card" href="pendientes.html">
+                <strong>Requisiciones</strong>
+                <span>Crear, consultar y generar formatos de compra.</span>
+            </a>
+            <a class="quick-card" href="inventario.html" style="border-left-color:#10b981;">
+                <strong>Inventario</strong>
+                <span>Revisar existencias, entradas, salidas y alertas.</span>
+            </a>
+            <a class="quick-card" href="expedientes.html" style="border-left-color:#f59e0b;">
+                <strong>Expedientes</strong>
+                <span>Seguimiento, documentos y estatus administrativos.</span>
+            </a>
+            <a class="quick-card" href="reportes.html" style="border-left-color:#6366f1;">
+                <strong>Reportes</strong>
+                <span>Consultar, filtrar, imprimir y exportar información.</span>
+            </a>
+        </div>
+
+        <div class="chart-row">
             <div class="chart-box">
-                <h3>Distribución por Departamento</h3>
-                <canvas id="areaChart"></canvas>
+                <h3>Resumen general por módulo</h3>
+                <canvas id="moduleChart"></canvas>
             </div>
             <div class="chart-box">
-                <h3>Requisiciones por Origen</h3>
-                <canvas id="originChart"></canvas>
+                <h3>Inventario por estado</h3>
+                <canvas id="inventoryChart"></canvas>
             </div>
             <div class="chart-box">
-                <h3>Eficiencia (Listos vs Pendientes)</h3>
-                <canvas id="statusChart"></canvas>
+                <h3>Expedientes por estatus</h3>
+                <canvas id="expStatusChart"></canvas>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="panel-card">
+                <h3>Últimos movimientos detectados</h3>
+                <div id="recentActivity" class="recent-list"></div>
+            </div>
+            <div class="panel-card">
+                <h3>Alertas importantes</h3>
+                <div id="alertsList" class="recent-list"></div>
             </div>
         </div>
     </main>
 
-    <!-- LÓGICA DE AUTOMATIZACIÓN DE FIREBASE EN TIEMPO REAL -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // Configuración de tu proyecto de Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
             authDomain: "sistemacopo-171ca.firebaseapp.com",
@@ -87,8 +222,12 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-
         const auth = getAuth(app);
+
+        let tareas = [];
+        let inventario = [];
+        let expedientes = [];
+        let unsubscribeFns = [];
 
         function rutaPorRol(rol) {
             rol = String(rol || '').trim().toLowerCase();
@@ -123,10 +262,15 @@
 
         async function obtenerPerfil(user) {
             const email = (user.email || '').trim().toLowerCase();
-            let snap = await getDoc(doc(db, 'usuario', email));
+            const snap = await getDoc(doc(db, 'usuario', email));
             if (!snap.exists()) return null;
             const data = snap.data();
-            return { correo: email, nombre: data.nombre || email, rol: String(data.rol || '').trim().toLowerCase(), activo: data.activo !== false };
+            return {
+                correo: email,
+                nombre: data.nombre || email,
+                rol: String(data.rol || '').trim().toLowerCase(),
+                activo: data.activo !== false
+            };
         }
 
         onAuthStateChanged(auth, async (user) => {
@@ -138,139 +282,209 @@
             const userEmail = document.getElementById('userEmail');
             if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
             configurarMenu(perfil.rol);
+            iniciarDashboard();
         });
 
         window.cerrarSesion = async () => {
+            unsubscribeFns.forEach(fn => fn && fn());
             sessionStorage.removeItem('perfilSistemaCopo');
             await signOut(auth);
             window.location.href = 'login.html';
         };
 
-        /* ==========================================================================
-           1. INICIALIZACIÓN DE GRÁFICOS VACÍOS (CHART.JS)
-           ========================================================================== */
-        
-        // Gráfico 1: Por Departamento (Pie)
-        const areaChart = new Chart(document.getElementById('areaChart'), {
-            type: 'pie',
-            data: {
-                labels: ['Máquinas', 'Cubierta', 'Base'],
-                datasets: [{
-                    data: [0, 0, 0],
-                    backgroundColor: ['#002147', '#C9A227', '#64748b']
-                }]
-            }
-        });
-
-        // Gráfico 2: Por Origen Solicitante (Barra) - Reemplaza al proveedor estático
-        const originChart = new Chart(document.getElementById('originChart'), {
-            type: 'bar',
-            data: {
-                labels: ['B/O El Puma', 'Base Pacífico', 'Oficina Central'],
-                datasets: [{
-                    label: 'Cantidad de Requisiciones',
-                    data: [0, 0, 0],
-                    backgroundColor: '#002147'
-                }]
+        const moduleChart = new Chart(document.getElementById('moduleChart'), {
+            type:'bar',
+            data:{
+                labels:['Requisiciones','Productos','Expedientes','Documentos'],
+                datasets:[{ label:'Total', data:[0,0,0,0], backgroundColor:'#002147' }]
             },
-            options: {
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
-                }
+            options:{ scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+        });
+
+        const inventoryChart = new Chart(document.getElementById('inventoryChart'), {
+            type:'doughnut',
+            data:{
+                labels:['Disponible','Bajo stock','Agotado'],
+                datasets:[{ data:[0,0,0], backgroundColor:['#10b981','#f59e0b','#ef4444'] }]
             }
         });
 
-        // Gráfico 3: Estado del Trabajo (Dona)
-        const statusChart = new Chart(document.getElementById('statusChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Completados', 'Pendientes'],
-                datasets: [{
-                    data: [0, 0],
-                    backgroundColor: ['#10b981', '#ef4444']
-                }]
+        const expStatusChart = new Chart(document.getElementById('expStatusChart'), {
+            type:'pie',
+            data:{
+                labels:['Recibido','En revisión','En proceso','Pendiente autorización','Finalizado/Archivado','Otros'],
+                datasets:[{ data:[0,0,0,0,0,0], backgroundColor:['#64748b','#3b82f6','#f59e0b','#ef4444','#10b981','#8b5cf6'] }]
             }
         });
 
-        /* ==========================================================================
-           2. ESCUCHA DE DATOS EN TIEMPO REAL (FIRESTORE)
-           ========================================================================== */
-        onSnapshot(collection(db, "tareas"), (snapshot) => {
-            const dataDocs = snapshot.docs.map(doc => doc.data());
+        function iniciarDashboard() {
+            unsubscribeFns.forEach(fn => fn && fn());
+            unsubscribeFns = [
+                onSnapshot(collection(db, 'tareas'), snap => { tareas = snap.docs.map(d => ({ id:d.id, ...d.data() })); renderDashboard(); }),
+                onSnapshot(collection(db, 'inventario'), snap => { inventario = snap.docs.map(d => ({ id:d.id, ...d.data() })); renderDashboard(); }),
+                onSnapshot(collection(db, 'expedientes'), snap => { expedientes = snap.docs.map(d => ({ id:d.id, ...d.data() })); renderDashboard(); })
+            ];
+        }
 
-            // Variables contadoras para las Tarjetas de Métricas
-            let activas = 0;
-            let sinCotizar = 0;
-            let incompleta = 0;
-            let solicitudCompra = 0;
+        function fechaObj(v) {
+            if (!v) return null;
+            if (v.seconds) return new Date(v.seconds * 1000);
+            if (typeof v === 'string') {
+                const d = new Date(v);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            if (v instanceof Date) return v;
+            return null;
+        }
 
-            // Variables para el Gráfico de Departamentos
-            let deptoMaquinas = 0;
-            let deptoCubierta = 0;
-            let deptoBase = 0;
+        function fechaTexto(v) {
+            const d = fechaObj(v);
+            if (!d) return 'Sin fecha';
+            return d.toLocaleDateString('es-MX') + ' ' + d.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+        }
 
-            // Variables para el Gráfico de Origen
-            let origPuma = 0;
-            let origPacifico = 0;
-            let origCentral = 0;
+        function escapeHTML(text) {
+            return String(text ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
+        }
 
-            // Variables para el Gráfico de Eficiencia
-            let totalCompletados = 0;
-            let totalPendientes = 0;
+        function estatusInventario(item) {
+            const actual = Number(item.cantidadActual || 0);
+            const minimo = Number(item.cantidadMinima || 0);
+            if (actual <= 0) return 'Agotado';
+            if (actual <= minimo) return 'Bajo stock';
+            return 'Disponible';
+        }
 
-            // Procesar y clasificar cada documento guardado en la base de datos
-            dataDocs.forEach(item => {
-                
-                if (item.status === 'Completado') {
-                    totalCompletados++;
-                } else if (item.status === 'Pendiente') {
-                    totalPendientes++;
-                    activas++;
+        function esExpedienteCerrado(estatus) {
+            const e = String(estatus || '').toLowerCase();
+            return e.includes('finalizado') || e.includes('archivado') || e.includes('rechazado');
+        }
 
-                    // Mapeo inteligente según la cotización capturada en el formulario dinámico
-                    if (item.cotizacion === 'Provisional') {
-                        incompleta++;
-                    } else if (item.cotizacion === 'Final') {
-                        solicitudCompra++;
-                    } else {
-                        sinCotizar++; // Si no se especificó o es un pendiente general antiguo
-                    }
+        function renderDashboard() {
+            const reqActivas = tareas.filter(t => String(t.status || '').toLowerCase() !== 'completado').length;
+            const reqCompletadas = tareas.filter(t => String(t.status || '').toLowerCase() === 'completado').length;
 
-                    // Clasificación por departamento para el gráfico de Pastel
-                    if (item.departamento === 'Máquinas') deptoMaquinas++;
-                    else if (item.departamento === 'Cubierta') deptoCubierta++;
-                    else if (item.departamento === 'Base') deptoBase++;
-
-                    // Clasificación por ubicación de origen para el gráfico de Barras
-                    if (item.area === 'B/O El Puma') origPuma++;
-                    else if (item.area === 'Base Pacífico') origPacifico++;
-                    else if (item.area === 'Oficina Central') origCentral++;
-                }
+            let invDisponible = 0, invBajo = 0, invAgotado = 0;
+            inventario.forEach(item => {
+                const estado = estatusInventario(item);
+                if (estado === 'Disponible') invDisponible++;
+                else if (estado === 'Bajo stock') invBajo++;
+                else invAgotado++;
             });
 
-            /* ==========================================================================
-               3. ACTUALIZACIÓN DINÁMICA DE LA INTERFAZ
-               ========================================================================== */
-            
-            // Inyectar los totales en las tarjetas HTML
-            document.getElementById('txtActivas').innerText = activas;
-            document.getElementById('txtSinCotizar').innerText = sinCotizar;
-            document.getElementById('txtIncompleta').innerText = incompleta;
-            document.getElementById('txtSolicitud').innerText = solicitudCompra;
+            const expAbiertos = expedientes.filter(e => !esExpedienteCerrado(e.estatus)).length;
+            const expCerrados = expedientes.length - expAbiertos;
+            const docsTotal = expedientes.reduce((acc, e) => acc + (Array.isArray(e.documentos) ? e.documentos.length : 0), 0);
 
-            // Actualizar datos del gráfico de pastel (Departamentos)
-            areaChart.data.datasets[0].data = [deptoMaquinas, deptoCubierta, deptoBase];
-            areaChart.update();
+            document.getElementById('txtReqActivas').innerText = reqActivas;
+            document.getElementById('txtReqDetalle').innerText = `${reqCompletadas} completadas / ${tareas.length} total`;
+            document.getElementById('txtInventarioAlerta').innerText = invBajo + invAgotado;
+            document.getElementById('txtInventarioDetalle').innerText = `${inventario.length} productos registrados`;
+            document.getElementById('txtExpAbiertos').innerText = expAbiertos;
+            document.getElementById('txtExpDetalle').innerText = `${expCerrados} finalizados o cerrados`;
+            document.getElementById('txtDocs').innerText = docsTotal;
 
-            // Actualizar datos del gráfico de barras (Origen de Requisición)
-            originChart.data.datasets[0].data = [origPuma, origPacifico, origCentral];
-            originChart.update();
+            moduleChart.data.datasets[0].data = [tareas.length, inventario.length, expedientes.length, docsTotal];
+            moduleChart.update();
 
-            // Actualizar datos del gráfico de dona (Eficiencia del Sistema)
-            statusChart.data.datasets[0].data = [totalCompletados, totalPendientes];
-            statusChart.update();
-        });
+            inventoryChart.data.datasets[0].data = [invDisponible, invBajo, invAgotado];
+            inventoryChart.update();
+
+            const expContadores = { recibido:0, revision:0, proceso:0, autorizacion:0, cerrado:0, otros:0 };
+            expedientes.forEach(e => {
+                const status = String(e.estatus || '').toLowerCase();
+                if (status.includes('recibido')) expContadores.recibido++;
+                else if (status.includes('revisión') || status.includes('revision')) expContadores.revision++;
+                else if (status.includes('proceso')) expContadores.proceso++;
+                else if (status.includes('autorización') || status.includes('autorizacion')) expContadores.autorizacion++;
+                else if (esExpedienteCerrado(status)) expContadores.cerrado++;
+                else expContadores.otros++;
+            });
+            expStatusChart.data.datasets[0].data = [expContadores.recibido, expContadores.revision, expContadores.proceso, expContadores.autorizacion, expContadores.cerrado, expContadores.otros];
+            expStatusChart.update();
+
+            renderActividad();
+            renderAlertas(invBajo, invAgotado, reqActivas, expAbiertos);
+        }
+
+        function renderActividad() {
+            const actividades = [];
+
+            tareas.forEach(t => {
+                actividades.push({
+                    tipo:'Requisición',
+                    titulo:t.folio || t.desc || 'Requisición sin folio',
+                    detalle:`Estado: ${t.status || 'Sin estado'} · ${t.departamento || t.area || 'Sin área'}`,
+                    fecha:fechaObj(t.timestamp || t.fecha || t.fechaActualizacion),
+                    badge:t.status || 'Requisición'
+                });
+            });
+
+            inventario.forEach(i => {
+                actividades.push({
+                    tipo:'Inventario',
+                    titulo:i.nombre || i.codigo || 'Producto sin nombre',
+                    detalle:`Existencia: ${Number(i.cantidadActual || 0)} ${i.unidadMedida || ''} · ${i.ubicacion || 'Sin ubicación'}`,
+                    fecha:fechaObj(i.ultimaModificacion || i.fechaRegistro),
+                    badge:estatusInventario(i)
+                });
+            });
+
+            expedientes.forEach(e => {
+                actividades.push({
+                    tipo:'Expediente',
+                    titulo:e.folio || e.asunto || 'Expediente sin folio',
+                    detalle:`${e.estatus || 'Sin estatus'} · Responsable: ${e.responsable || 'Sin responsable'}`,
+                    fecha:fechaObj(e.fechaActualizacion || e.fechaCreacion || e.fechaInicio),
+                    badge:e.prioridad || e.estatus || 'Expediente'
+                });
+            });
+
+            actividades.sort((a,b) => (b.fecha ? b.fecha.getTime() : 0) - (a.fecha ? a.fecha.getTime() : 0));
+            const cont = document.getElementById('recentActivity');
+            const top = actividades.slice(0, 7);
+            if (!top.length) {
+                cont.innerHTML = '<div class="recent-item"><strong>Sin movimientos todavía</strong><span>Cuando registres información aparecerá aquí.</span></div>';
+                return;
+            }
+            cont.innerHTML = top.map(a => `
+                <div class="recent-item">
+                    <strong>${escapeHTML(a.titulo)}</strong>
+                    <span>${escapeHTML(a.tipo)} · ${escapeHTML(a.detalle)} · ${escapeHTML(fechaTexto(a.fecha))}</span><br>
+                    <span class="badge ${claseBadge(a.badge)}">${escapeHTML(a.badge)}</span>
+                </div>
+            `).join('');
+        }
+
+        function claseBadge(valor) {
+            const v = String(valor || '').toLowerCase();
+            if (v.includes('agotado') || v.includes('rechazado') || v.includes('pendiente') || v.includes('alta')) return 'badge-bad';
+            if (v.includes('bajo') || v.includes('proceso') || v.includes('provisional') || v.includes('media')) return 'badge-warn';
+            if (v.includes('disponible') || v.includes('completado') || v.includes('final') || v.includes('finalizado') || v.includes('normal')) return 'badge-ok';
+            return 'badge-blue';
+        }
+
+        function renderAlertas(invBajo, invAgotado, reqActivas, expAbiertos) {
+            const alertas = [];
+            inventario.filter(i => estatusInventario(i) !== 'Disponible').slice(0, 5).forEach(i => {
+                alertas.push({
+                    titulo: estatusInventario(i) === 'Agotado' ? 'Producto agotado' : 'Producto con bajo stock',
+                    detalle: `${i.nombre || i.codigo || 'Producto'} · Existencia: ${Number(i.cantidadActual || 0)} ${i.unidadMedida || ''}`,
+                    badge: estatusInventario(i)
+                });
+            });
+            if (reqActivas > 0) alertas.push({ titulo:'Requisiciones pendientes', detalle:`Hay ${reqActivas} requisición(es) activas por revisar.`, badge:'Pendiente' });
+            if (expAbiertos > 0) alertas.push({ titulo:'Expedientes abiertos', detalle:`Hay ${expAbiertos} expediente(s) en seguimiento.`, badge:'En proceso' });
+            if (!alertas.length) alertas.push({ titulo:'Sin alertas críticas', detalle:'No hay inventario bajo, requisiciones activas ni expedientes abiertos.', badge:'Correcto' });
+
+            document.getElementById('alertsList').innerHTML = alertas.slice(0, 8).map(a => `
+                <div class="recent-item">
+                    <strong>${escapeHTML(a.titulo)}</strong>
+                    <span>${escapeHTML(a.detalle)}</span><br>
+                    <span class="badge ${claseBadge(a.badge)}">${escapeHTML(a.badge)}</span>
+                </div>
+            `).join('');
+        }
     </script>
-
 </body>
 </html>
