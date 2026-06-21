@@ -142,34 +142,11 @@
             font-weight: bold;
         }
         .btn-logout:hover { background: #dc2626; }
-
-        .history-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-top: 15px;
-        }
-        .history-item {
-            border-left: 4px solid #002147;
-            background: #f8fafc;
-            padding: 12px 14px;
-            border-radius: 8px;
-        }
-        .history-item strong {
-            color: #002147;
-            display: block;
-            margin-bottom: 4px;
-        }
-        .history-item small {
-            color: #64748b;
-            display: block;
-            margin-top: 4px;
-        }
     </style>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, updateDoc, doc, query, orderBy, addDoc, deleteDoc, arrayUnion, getDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, updateDoc, doc, query, orderBy, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
         const firebaseConfig = {
@@ -185,30 +162,39 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-
         async function obtenerPerfil(user) {
-            const email = (user.email || '').toLowerCase();
+            const email = (user.email || '').trim().toLowerCase();
             let snap = await getDoc(doc(db, "usuario", email));
 
-            // Respaldo por si el ID del documento no coincide exactamente con el correo.
             if (!snap.exists()) {
                 const q = query(collection(db, "usuario"), where("correo", "==", email));
                 const res = await getDocs(q);
-                if (res.empty) return null;
-                snap = res.docs[0];
+                if (!res.empty) snap = res.docs[0];
             }
 
+            if (!snap.exists()) {
+                let snapAlt = await getDoc(doc(db, "usuarios", email));
+                if (!snapAlt.exists()) {
+                    const qAlt = query(collection(db, "usuarios"), where("correo", "==", email));
+                    const resAlt = await getDocs(qAlt);
+                    if (!resAlt.empty) snapAlt = resAlt.docs[0];
+                }
+                if (snapAlt.exists()) snap = snapAlt;
+            }
+
+            if (!snap.exists()) return null;
             const data = snap.data();
             return {
                 id: snap.id,
                 correo: email,
                 nombre: data.nombre || email,
-                rol: (data.rol || '').toLowerCase(),
+                rol: String(data.rol || '').trim().toLowerCase(),
                 activo: data.activo !== false
             };
         }
 
         function rutaPorRol(rol) {
+            rol = String(rol || '').trim().toLowerCase();
             if (rol === 'administrador') return 'index.html';
             if (rol === 'compras') return 'pendientes.html';
             if (rol === 'almacen') return 'inventario.html';
@@ -233,31 +219,56 @@
             }
         }
 
+        function obtenerPerfilCache() {
+            try {
+                return JSON.parse(sessionStorage.getItem('perfilSistemaCopo') || 'null');
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function irA(ruta) {
+            const actual = window.location.pathname.split('/').pop();
+            if (actual !== ruta) window.location.href = ruta;
+        }
+
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
-                window.location.href = "login.html";
+                sessionStorage.removeItem('perfilSistemaCopo');
+                irA("login.html");
                 return;
             }
 
-            const perfil = await obtenerPerfil(user);
+            let perfil = null;
+            try {
+                perfil = await obtenerPerfil(user);
+            } catch (error) {
+                console.error("No se pudo leer el perfil desde Firestore:", error);
+                perfil = obtenerPerfilCache();
+            }
+
             if (!perfil || !perfil.activo) {
-                await signOut(auth);
-                window.location.href = "login.html";
+                sessionStorage.removeItem('perfilSistemaCopo');
+                irA("login.html");
                 return;
             }
+
+            sessionStorage.setItem('perfilSistemaCopo', JSON.stringify(perfil));
 
             const rolesPermitidos = ['administrador', 'compras'];
             if (!rolesPermitidos.includes(perfil.rol)) {
-                window.location.href = rutaPorRol(perfil.rol);
+                irA(rutaPorRol(perfil.rol));
                 return;
             }
 
+            
             const userEmail = document.getElementById('userEmail');
             if (userEmail) userEmail.innerText = `${perfil.nombre} (${perfil.rol})`;
             configurarMenu(perfil.rol);
         });
 
         window.cerrarSesion = async () => {
+            sessionStorage.removeItem('perfilSistemaCopo');
             await signOut(auth);
             window.location.href = "login.html";
         };
@@ -294,72 +305,6 @@
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
         }
-
-
-
-        function obtenerUsuarioActual() {
-            const user = auth.currentUser;
-            return user?.email || 'Usuario no identificado';
-        }
-
-        function crearMovimiento(accion, detalle = '') {
-            return {
-                accion,
-                detalle,
-                usuario: obtenerUsuarioActual(),
-                fecha: new Date().toISOString()
-            };
-        }
-
-        function formatoFechaHora(fechaISO) {
-            if (!fechaISO) return 'Sin fecha';
-            try {
-                return new Date(fechaISO).toLocaleString('es-MX', {
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit'
-                });
-            } catch (error) {
-                return fechaISO;
-            }
-        }
-
-        window.abrirHistorial = (id) => {
-            const item = allData.find(d => d.id === id);
-            if (!item) {
-                alert('No se encontró la requisición.');
-                return;
-            }
-
-            const titulo = document.getElementById('historialTitulo');
-            const contenido = document.getElementById('historialContenido');
-            titulo.innerText = `Historial - ${item.folio || item.desc || 'Requisición'}`;
-
-            const historial = Array.isArray(item.historial) ? [...item.historial] : [];
-
-            if (!historial.length) {
-                contenido.innerHTML = `
-                    <div class="history-item">
-                        <strong>Sin historial previo</strong>
-                        <span>Esta requisición fue creada antes de activar el historial de movimientos.</span>
-                    </div>
-                `;
-            } else {
-                historial.sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
-                contenido.innerHTML = historial.map(mov => `
-                    <div class="history-item">
-                        <strong>${escapeHTML(mov.accion || 'Movimiento')}</strong>
-                        <span>${escapeHTML(mov.detalle || '')}</span>
-                        <small>${escapeHTML(mov.usuario || 'Usuario')} · ${escapeHTML(formatoFechaHora(mov.fecha))}</small>
-                    </div>
-                `).join('');
-            }
-
-            document.getElementById('historialModal').style.display = 'block';
-        };
-
-        window.cerrarHistorial = () => {
-            document.getElementById('historialModal').style.display = 'none';
-        };
 
         function cleanFileName(value) {
             return String(value || 'Requisicion')
@@ -471,14 +416,8 @@
         };
 
         // Marcar tarea o requisición como completada
-        window.complete = async (id) => {
-            const item = allData.find(d => d.id === id);
-            const nombre = item?.folio || item?.desc || 'Requisición';
-            await updateDoc(doc(db, 'tareas', id), {
-                status: 'Completado',
-                updatedAt: new Date(),
-                historial: arrayUnion(crearMovimiento('Estado actualizado', `${nombre} fue marcada como Completado.`))
-            });
+        window.complete = async (id) => { 
+            await updateDoc(doc(db, 'tareas', id), { status: 'Completado' }); 
         };
 
         window.deleteRequisicion = async (id) => {
@@ -1092,7 +1031,6 @@
                     <td>
                         <button onclick="descargarExcelRequisicion('${item.id}')" class="btn-table" style="border-color: #10b981; color: #047857;">📥 Excel</button>
                         <button onclick="imprimirRequisicion('${item.id}')" class="btn-table" style="border-color: #002147; color: #002147;">🖨️ Imprimir</button>
-                        <button onclick="abrirHistorial('${item.id}')" class="btn-table" style="border-color:#64748b; color:#334155;">🕓 Historial</button>
                         <button onclick="editarRequisicion('${item.id}')" class="btn-table" style="border-color:#f59e0b; color:#b45309;">✏️ Editar</button>
                         <button onclick="deleteRequisicion('${item.id}')" class="btn-table" style="border-color:#ef4444; color:#dc2626;">🗑️ Eliminar</button>
                         ${estado === 'Pendiente' ? `<button onclick="complete('${item.id}')" class="btn-table" style="background:#10b981; color:white; border-color:#10b981;">✓ Listo</button>` : '✅'}
@@ -1172,18 +1110,13 @@
                         };
 
                         if (editingId) {
-                            await updateDoc(doc(db, 'tareas', editingId), {
-                                ...datosGuardar,
-                                historial: arrayUnion(crearMovimiento('Requisición editada', `Se actualizaron los datos de la requisición ${folio}.`))
-                            });
+                            await updateDoc(doc(db, 'tareas', editingId), datosGuardar);
                             alert('Requisición actualizada correctamente.');
                         } else {
                             await addDoc(collection(db, 'tareas'), {
                                 ...datosGuardar,
                                 status: 'Pendiente',
-                                timestamp: new Date(),
-                                createdBy: obtenerUsuarioActual(),
-                                historial: [crearMovimiento('Requisición creada', `Se creó la requisición ${folio}.`)]
+                                timestamp: new Date()
                             });
                             alert('¡Requisición guardada exitosamente!');
                         }
@@ -1222,7 +1155,6 @@
         <nav id="mainNav">
             <a href="index.html">Dashboard Principal</a>
             <a href="pendientes.html">Pendientes Generales</a>
-            <a href="inventario.html">Inventario de Almacén</a>
         </nav>
         <div class="user-box" style="margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15);">
             <span class="user-email" id="userEmail" style="display:block; margin-bottom:10px; color:#cbd5e1; font-size:0.85rem; word-break:break-word;">Usuario</span>
@@ -1405,18 +1337,6 @@
                 <!-- Botón de Envío -->
                 <button id="submitBtn" type="submit" class="btn-nueva" style="width: 100%; padding: 14px; font-size: 1rem;">Guardar y Registrar Requisición</button>
             </form>
-        </div>
-    </div>
-
-
-    <!-- MODAL DE HISTORIAL DE MOVIMIENTOS -->
-    <div id="historialModal" class="modal">
-        <div class="modal-content" style="max-width: 650px; max-height: 85vh; overflow-y: auto;">
-            <span class="close-btn" onclick="cerrarHistorial()">&times;</span>
-            <h2 id="historialTitulo" style="font-size: 1.4rem; color: #002147; margin-bottom: 5px;">Historial</h2>
-            <p style="color:#64748b; font-size:0.85rem; margin-bottom: 15px;">Movimientos registrados de la requisición</p>
-            <hr style="margin-bottom: 15px; border: 0; border-top: 1px solid #e2e8f0;">
-            <div id="historialContenido" class="history-list"></div>
         </div>
     </div>
 

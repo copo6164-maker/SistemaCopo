@@ -24,66 +24,15 @@
             text-align: center;
         }
 
-        .login-card img {
-            width: 110px;
-            margin-bottom: 15px;
-        }
-
-        .login-card h1 {
-            color: #002147;
-            font-size: 1.6rem;
-            margin-bottom: 5px;
-        }
-
-        .login-card p {
-            color: #64748b;
-            margin-bottom: 25px;
-            font-size: 0.9rem;
-        }
-
-        .form-group {
-            text-align: left;
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            font-weight: 600;
-            color: #334155;
-            margin-bottom: 6px;
-            font-size: 0.9rem;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            font-size: 0.95rem;
-        }
-
-        .btn-login {
-            width: 100%;
-            background: #002147;
-            color: white;
-            border: none;
-            padding: 13px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        .btn-login:hover {
-            background: #003366;
-        }
-
-        .error {
-            margin-top: 15px;
-            color: #ef4444;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
+        .login-card img { width: 110px; margin-bottom: 15px; }
+        .login-card h1 { color: #002147; font-size: 1.6rem; margin-bottom: 5px; }
+        .login-card p { color: #64748b; margin-bottom: 25px; font-size: 0.9rem; }
+        .form-group { text-align: left; margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 600; color: #334155; margin-bottom: 6px; font-size: 0.9rem; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; }
+        .btn-login { width: 100%; background: #002147; color: white; border: none; padding: 13px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        .btn-login:hover { background: #003366; }
+        .error { margin-top: 15px; color: #ef4444; font-size: 0.9rem; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -105,28 +54,14 @@
             </div>
 
             <button type="submit" class="btn-login">Ingresar</button>
-
             <div id="errorMsg" class="error"></div>
         </form>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { 
-            getAuth, 
-            signInWithEmailAndPassword,
-            onAuthStateChanged,
-            signOut
-        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-        import { 
-            getFirestore,
-            collection,
-            query,
-            where,
-            getDocs,
-            doc,
-            getDoc
-        } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyA1g6pT_M76Pf9WSre1a7v-E773hFetkKw",
@@ -142,70 +77,83 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        function rutaPorRol(rol) {
+            rol = String(rol || '').trim().toLowerCase();
+            if (rol === 'administrador') return 'index.html';
+            if (rol === 'compras') return 'pendientes.html';
+            if (rol === 'almacen') return 'inventario.html';
+            return 'login.html';
+        }
+
         async function obtenerPerfil(user) {
-            const email = (user.email || '').toLowerCase();
+            const email = (user.email || '').trim().toLowerCase();
             let snap = await getDoc(doc(db, "usuario", email));
 
-            // Respaldo por si el ID del documento no coincide exactamente con el correo.
             if (!snap.exists()) {
                 const q = query(collection(db, "usuario"), where("correo", "==", email));
                 const res = await getDocs(q);
-                if (res.empty) return null;
-                snap = res.docs[0];
+                if (!res.empty) snap = res.docs[0];
             }
 
+            if (!snap.exists()) {
+                let snapAlt = await getDoc(doc(db, "usuarios", email));
+                if (!snapAlt.exists()) {
+                    const qAlt = query(collection(db, "usuarios"), where("correo", "==", email));
+                    const resAlt = await getDocs(qAlt);
+                    if (!resAlt.empty) snapAlt = resAlt.docs[0];
+                }
+                if (snapAlt.exists()) snap = snapAlt;
+            }
+
+            if (!snap.exists()) return null;
             const data = snap.data();
             return {
                 id: snap.id,
                 correo: email,
                 nombre: data.nombre || email,
-                rol: (data.rol || '').toLowerCase(),
+                rol: String(data.rol || '').trim().toLowerCase(),
                 activo: data.activo !== false
             };
         }
 
-        function rutaPorRol(rol) {
-            if (rol === 'administrador') return 'index.html';
-            if (rol === 'compras') return 'pendientes.html';
-            if (rol === 'almacen') return 'inventario.html';
-            return 'index.html';
+        async function entrarConUsuario(user) {
+            const perfil = await obtenerPerfil(user);
+            if (!perfil) {
+                await signOut(auth);
+                sessionStorage.removeItem('perfilSistemaCopo');
+                document.getElementById("errorMsg").textContent = "El usuario no tiene rol asignado en el sistema.";
+                return;
+            }
+            if (!perfil.activo) {
+                await signOut(auth);
+                sessionStorage.removeItem('perfilSistemaCopo');
+                document.getElementById("errorMsg").textContent = "El usuario está desactivado.";
+                return;
+            }
+            sessionStorage.setItem('perfilSistemaCopo', JSON.stringify(perfil));
+            window.location.href = rutaPorRol(perfil.rol);
         }
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                const perfil = await obtenerPerfil(user);
-                if (perfil && perfil.activo) {
-                    window.location.href = rutaPorRol(perfil.rol);
+                try {
+                    await entrarConUsuario(user);
+                } catch (error) {
+                    console.error(error);
+                    document.getElementById("errorMsg").textContent = "No se pudo leer el rol del usuario.";
                 }
             }
         });
 
-        const loginForm = document.getElementById("loginForm");
-        const errorMsg = document.getElementById("errorMsg");
-
-        loginForm.addEventListener("submit", async (e) => {
+        document.getElementById("loginForm").addEventListener("submit", async (e) => {
             e.preventDefault();
-
-            const email = document.getElementById("email").value;
+            const email = document.getElementById("email").value.trim();
             const password = document.getElementById("password").value;
-
+            const errorMsg = document.getElementById("errorMsg");
+            errorMsg.textContent = "";
             try {
                 const cred = await signInWithEmailAndPassword(auth, email, password);
-                const perfil = await obtenerPerfil(cred.user);
-
-                if (!perfil) {
-                    await signOut(auth);
-                    errorMsg.textContent = "El usuario no tiene rol asignado en el sistema.";
-                    return;
-                }
-
-                if (!perfil.activo) {
-                    await signOut(auth);
-                    errorMsg.textContent = "El usuario está desactivado.";
-                    return;
-                }
-
-                window.location.href = rutaPorRol(perfil.rol);
+                await entrarConUsuario(cred.user);
             } catch (error) {
                 errorMsg.textContent = "Correo o contraseña incorrectos o sin permisos.";
                 console.error(error);

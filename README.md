@@ -97,23 +97,3 @@ git add .
 git commit -m "Descripcion del cambio"
 git push
 ```
-
-## Módulo Inventario de Almacén
-
-El sistema incluye un módulo de inventario para registrar, consultar, editar y eliminar productos de almacén.
-
-Funciones principales:
-
-- Registro de productos con código, nombre, descripción, categoría, unidad de medida, cantidad actual, cantidad mínima y ubicación.
-- Búsqueda por código, producto, descripción o ubicación.
-- Filtros por categoría y estado.
-- Estados automáticos: Disponible, Bajo stock y Agotado.
-- Registro de entradas y salidas de almacén.
-- Historial de movimientos por producto.
-- Control de usuario que registra o modifica productos.
-
-Colección usada en Firebase Firestore:
-
-```text
-inventario
-```
